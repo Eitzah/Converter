@@ -1,0 +1,1676 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Door Schedule Converter v3</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f2f5; color: #1a1e2e; min-height: 100vh; font-size: 13px; }
+
+/* ── Header ── */
+.header { border-bottom: 3px solid #b8860b; padding: 13px 28px; display: flex; align-items: center; justify-content: space-between; background: #1a1e2e; }
+.header-left { display: flex; align-items: baseline; gap: 12px; }
+.header-label { font-size: 10px; letter-spacing: 4px; color: #b8860b; text-transform: uppercase; }
+.header-title { font-size: 20px; font-weight: 700; letter-spacing: 0.5px; color: #ffffff; }
+.header-ver { font-size: 9px; letter-spacing: 2px; background: rgba(184,134,11,0.2); color: #d4a017; border: 1px solid rgba(184,134,11,0.4); padding: 2px 7px; }
+.tabs { display: flex; gap: 4px; }
+.tab { padding: 6px 16px; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; border: 1px solid #3a3f52; cursor: pointer; font-family: inherit; transition: all 0.15s; background: transparent; color: #8890aa; border-radius: 3px; }
+.tab.active { border-color: #b8860b; color: #d4a017; background: rgba(184,134,11,0.1); }
+.tab.has-alert { border-color: #d4730a; color: #e67e22; background: rgba(230,126,34,0.1); }
+.tab:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* ── Layout ── */
+.page { padding: 24px 28px; max-width: 1300px; margin: 0 auto; display: none; }
+.page.active { display: block; }
+.hidden { display: none; }
+
+/* ── Upload zone ── */
+.upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+.dropzone { border: 2px dashed #c8cdd8; padding: 32px 16px; text-align: center; cursor: pointer; background: #ffffff; transition: all 0.2s; border-radius: 6px; position: relative; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.dropzone:hover, .dropzone.drag { border-color: #b8860b; background: #fffbf0; }
+.dropzone.loaded { border-color: #2e7d32; background: #f1f8f1; }
+.dz-icon { font-size: 26px; margin-bottom: 8px; }
+.dz-type { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #8890aa; margin-bottom: 6px; font-weight: 600; }
+.dz-name { font-size: 12px; color: #6b7280; }
+.dz-name.loaded { color: #2e7d32; font-weight: 600; }
+.dz-check { position: absolute; top: 10px; right: 12px; color: #2e7d32; font-size: 16px; }
+
+/* ── Buttons ── */
+.btn { padding: 8px 20px; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; font-family: inherit; border: 1px solid #b8860b; transition: all 0.15s; border-radius: 3px; font-weight: 600; }
+.btn-gold { background: #b8860b; color: #ffffff; font-weight: 700; border-color: #b8860b; }
+.btn-gold:hover { background: #9a7009; }
+.btn-outline { background: transparent; color: #b8860b; }
+.btn-outline:hover { background: rgba(184,134,11,0.08); }
+.btn-sm { padding: 5px 12px; font-size: 10px; }
+.btn-danger { border-color: #c0392b; color: #c0392b; background: transparent; }
+.btn:hover { opacity: 0.9; }
+.btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.action-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+
+/* ── Error/Info ── */
+.msg-box { padding: 10px 16px; margin-bottom: 14px; font-size: 12px; border-radius: 4px; }
+.msg-error { background: #fef2f2; border: 1px solid #fca5a5; color: #b91c1c; }
+.msg-info  { background: #eff6ff; border: 1px solid #93c5fd; color: #1d4ed8; }
+.msg-warn  { background: #fffbeb; border: 1px solid #fcd34d; color: #92400e; }
+
+/* ── Hardware Sets Tab ── */
+.sets-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(560px, 1fr)); gap: 14px; }
+.set-card { background: #ffffff; border: 1px solid #e2e5ec; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.set-card.confirmed { border-color: #86efac; }
+.set-card.needs-review { border-color: #fcd34d; }
+.set-card-header { padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #f0f2f5; background: #f8f9fb; }
+.set-id { font-size: 14px; font-weight: 700; color: #1a1e2e; letter-spacing: 0.5px; }
+.set-opng { font-size: 10px; color: #8890aa; letter-spacing: 1px; margin-left: 8px; font-weight: 600; text-transform: uppercase; }
+.set-status { font-size: 9px; letter-spacing: 1px; text-transform: uppercase; padding: 3px 8px; border-radius: 3px; font-weight: 700; }
+.status-auto      { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+.status-review    { background: #fffbeb; color: #92400e; border: 1px solid #fcd34d; }
+.status-confirmed { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+.set-items { padding: 10px 14px; background: #ffffff; }
+.item-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 7px; font-size: 12px; }
+.item-desc { color: #374151; flex: 1; line-height: 1.5; }
+.item-chip { font-size: 10px; letter-spacing: 0.5px; padding: 2px 7px; border-radius: 3px; white-space: nowrap; flex-shrink: 0; font-weight: 600; }
+.chip-hinge  { background: #dbeafe; color: #1d4ed8; border: 1px solid #93c5fd; }
+.chip-lock   { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+.chip-closer { background: #f3e8ff; color: #7e22ce; border: 1px solid #d8b4fe; }
+.chip-other  { background: #f3f4f6; color: #6b7280; border: 1px solid #d1d5db; }
+.chip-new    { background: #fef2f2; color: #b91c1c; border: 1px solid #fca5a5; }
+.chip-append { background: #f0fdf4; color: #15803d; border: 1px solid #86efac; }
+.set-prep-area { padding: 10px 14px; background: #f8f9fb; border-top: 1px solid #f0f2f5; }
+.prep-label { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: #8890aa; margin-bottom: 6px; font-weight: 600; }
+.prep-input { background: #ffffff; border: 1px solid #d1d5db; color: #1a1e2e; padding: 7px 10px; font-size: 12px; font-family: inherit; width: 100%; margin-bottom: 8px; border-radius: 3px; font-weight: 500; }
+.prep-input:focus { outline: none; border-color: #b8860b; box-shadow: 0 0 0 2px rgba(184,134,11,0.12); }
+.prep-actions { display: flex; gap: 6px; align-items: center; }
+.confirm-btn { padding: 5px 14px; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; font-family: inherit; border: 1px solid #16a34a; color: #16a34a; background: transparent; transition: all 0.15s; border-radius: 3px; font-weight: 700; }
+.confirm-btn:hover { background: #dcfce7; }
+.no-prep-btn { padding: 5px 14px; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; font-family: inherit; border: 1px solid #d1d5db; color: #6b7280; background: transparent; border-radius: 3px; font-weight: 600; }
+.no-prep-btn:hover { border-color: #9ca3af; color: #374151; }
+.sets-summary { display: flex; gap: 24px; margin-bottom: 20px; padding: 14px 20px; background: #ffffff; border: 1px solid #e2e5ec; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+.sum-item { display: flex; flex-direction: column; gap: 3px; }
+.sum-val { font-size: 22px; font-weight: 800; color: #1a1e2e; }
+.sum-lbl { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: #8890aa; font-weight: 600; }
+
+/* ── Convert Results ── */
+.subtabs { display: flex; border-bottom: 2px solid #e2e5ec; margin-bottom: 0; }
+.subtab { padding: 9px 22px; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; font-family: inherit; background: transparent; color: #8890aa; border: none; border-bottom: 2px solid transparent; transition: all 0.15s; font-weight: 600; margin-bottom: -2px; }
+.subtab.active { color: #b8860b; border-bottom-color: #b8860b; }
+.table-wrap { overflow-x: auto; border: 1px solid #e2e5ec; max-height: 420px; overflow-y: auto; border-radius: 0 0 6px 6px; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+thead tr { background: #1a1e2e; position: sticky; top: 0; z-index: 1; }
+th { padding: 9px 12px; text-align: left; letter-spacing: 0.5px; color: #d4a017; white-space: nowrap; font-weight: 600; border-bottom: 2px solid #b8860b; font-size: 11px; }
+td { padding: 7px 12px; white-space: nowrap; color: #374151; border-bottom: 1px solid #f0f2f5; }
+tr:nth-child(even) td { background: #f8f9fb; }
+tr:hover td { background: #fffbf0; }
+td.prep-cell { color: #92400e; font-weight: 600; }
+td.prep-missing { color: #b91c1c; font-style: italic; }
+
+/* ── Settings ── */
+.s-wrap { max-width: 780px; }
+.s-section { margin-bottom: 26px; }
+.s-title { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: #b8860b; border-bottom: 2px solid #e2e5ec; padding-bottom: 7px; margin-bottom: 14px; font-weight: 700; }
+.field-label { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: #6b7280; display: block; margin-bottom: 5px; font-weight: 600; }
+.field-input { background: #ffffff; border: 1px solid #d1d5db; color: #1a1e2e; padding: 7px 10px; font-size: 12px; font-family: inherit; width: 100%; border-radius: 3px; }
+.field-input:focus { outline: none; border-color: #b8860b; box-shadow: 0 0 0 2px rgba(184,134,11,0.12); }
+.field-hint { font-size: 10px; color: #9ca3af; margin-top: 3px; }
+.map-row { display: grid; grid-template-columns: 1fr 18px 1fr 20px; gap: 5px; align-items: center; margin-bottom: 5px; }
+.arrow { text-align: center; color: #9ca3af; font-size: 12px; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.s-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.btn-save { width: 100%; padding: 11px; background: #b8860b; color: #ffffff; border: none; font-size: 11px; letter-spacing: 2px; cursor: pointer; font-family: inherit; font-weight: 700; transition: all 0.3s; margin-top: 8px; text-transform: uppercase; border-radius: 3px; }
+.btn-save:hover { background: #9a7009; }
+.btn-save.saved { background: #15803d; color: #ffffff; }
+
+/* ── Item memory table ── */
+.mem-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.mem-table th, .mem-table td { padding: 6px 10px; border-bottom: 1px solid #f0f2f5; }
+.mem-table th { color: #b8860b; font-weight: 700; font-size: 11px; letter-spacing: 0.5px; background: #f8f9fb; position: sticky; top: 0; border-bottom: 2px solid #e2e5ec; }
+.mem-scroll { max-height: 260px; overflow-y: auto; border: 1px solid #e2e5ec; border-radius: 4px; }
+.po-input { background: #ffffff; border: 1px solid #d1d5db; color: #1a1e2e; padding: 7px 10px; font-size: 12px; font-family: inherit; width: 140px; border-radius: 3px; font-weight: 500; }
+.po-input:focus { outline: none; border-color: #b8860b; }
+.section-lbl { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: #6b7280; white-space: nowrap; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div>
+      <div class="header-label">Door Schedule</div>
+      <div class="header-title">Converter</div>
+    </div>
+    <span class="header-ver">v3</span>
+  </div>
+  <div class="tabs">
+    <button class="tab active" id="tab-btn-upload"  onclick="goTab('upload')">Upload</button>
+    <button class="tab" id="tab-btn-sets"    onclick="goTab('sets')"   disabled>Hardware Sets</button>
+    <button class="tab" id="tab-btn-convert" onclick="goTab('convert')" disabled>Convert</button>
+    <button class="tab" id="tab-btn-settings" onclick="goTab('settings')">Settings</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     TAB 1 — UPLOAD
+═════════════════════════════════════════════ -->
+<div class="page active" id="page-upload">
+  <div class="upload-grid">
+    <!-- XLSX -->
+    <div class="dropzone" id="dz-xlsx"
+      onclick="document.getElementById('inp-xlsx').click()"
+      ondragover="event.preventDefault();this.classList.add('drag')"
+      ondragleave="this.classList.remove('drag')"
+      ondrop="dzDrop(event,'xlsx')">
+      <input type="file" id="inp-xlsx" accept=".xlsx,.xls" style="display:none" onchange="dzPick(event,'xlsx')">
+      <div class="dz-icon">📊</div>
+      <div class="dz-type">Opening Schedule</div>
+      <div class="dz-name" id="xlsx-name">Drop .xlsx file here or click</div>
+    </div>
+    <!-- PDF -->
+    <div class="dropzone" id="dz-pdf"
+      onclick="document.getElementById('inp-pdf').click()"
+      ondragover="event.preventDefault();this.classList.add('drag')"
+      ondragleave="this.classList.remove('drag')"
+      ondrop="dzDrop(event,'pdf')">
+      <input type="file" id="inp-pdf" accept=".pdf" style="display:none" onchange="dzPick(event,'pdf')">
+      <div class="dz-icon">📄</div>
+      <div class="dz-type">Hardware Schedule PDF <span style="font-size:9px;color:#9ca3af;font-weight:400;letter-spacing:0">(optional)</span></div>
+      <div class="dz-name" id="pdf-name">Drop .pdf file here or click</div>
+    </div>
+  </div>
+  <div id="upload-msg"></div>
+  <div class="action-bar">
+    <button class="btn btn-gold" id="btn-parse" onclick="parseFiles()" disabled>▶ Parse Files</button>
+    <button class="btn btn-outline" id="btn-reset" onclick="resetJob()" style="border-color:#d1d5db;color:#6b7280;">↺ Start Over</button>
+    <span id="parse-status" style="font-size:11px;color:#6b7280;"></span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     TAB 2 — HARDWARE SETS REVIEW
+═════════════════════════════════════════════ -->
+<div class="page" id="page-sets">
+  <div class="sets-summary" id="setsSummary"></div>
+  <div class="action-bar">
+    <button class="btn btn-gold" onclick="confirmAllAuto()">✓ Confirm All Auto</button>
+    <button class="btn btn-outline" onclick="goTab('convert')">▶ Proceed to Convert</button>
+    <button class="btn btn-outline" onclick="exportHardwareAudit()" id="btnAudit">⬇ Hardware Audit .xlsx</button>
+    <span style="font-size:10px;color:#6b7280;letter-spacing:1px;margin-left:8px;">REVIEW FLAGGED SETS BEFORE CONVERTING</span>
+  </div>
+  <div class="sets-grid" id="setsGrid"></div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     TAB 3 — CONVERT
+═════════════════════════════════════════════ -->
+<div class="page" id="page-convert">
+  <div class="action-bar">
+    <span class="section-lbl">PO #</span>
+    <input class="po-input" id="poInput" placeholder="e.g. 23804">
+    <button class="btn btn-gold" onclick="doConvert()">▶ Convert</button>
+    <button class="btn btn-outline hidden" id="btnExpDoors"  onclick="doExport('doors')">⬇ Doors .xlsx</button>
+    <button class="btn btn-outline hidden" id="btnExpFrames" onclick="doExport('frames')">⬇ Frames .xlsx</button>
+    <button class="btn btn-outline hidden" id="btnExpBoth"   onclick="doExportBoth()">⬇ Combined .xlsx</button>
+  </div>
+  <div id="convert-warn" class="msg-box msg-warn hidden"></div>
+  <div class="hidden" id="resultSection">
+    <div class="subtabs">
+      <button class="subtab active" id="st-doors"  onclick="switchSub('doors')">WD Doors  <span id="cntDoors"  class="header-ver" style="margin-left:4px"></span></button>
+      <button class="subtab"        id="st-frames" onclick="switchSub('frames')">HM Frames <span id="cntFrames" class="header-ver" style="margin-left:4px"></span></button>
+    </div>
+    <div id="panel-doors" ><div class="table-wrap"><table id="tblDoors"></table></div></div>
+    <div id="panel-frames" class="hidden"><div class="table-wrap"><table id="tblFrames"></table></div></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     TAB 4 — SETTINGS
+═════════════════════════════════════════════ -->
+<div class="page" id="page-settings">
+<div class="s-wrap">
+  <div class="s-section">
+    <div class="s-title">General</div>
+    <div class="two-col">
+      <div><label class="field-label">Default PO Number</label><input class="field-input" id="s-po" placeholder="e.g. 23804"></div>
+    </div>
+    <div style="margin-top:12px;">
+      <label class="field-label">Anthropic API Key
+        <span style="font-size:10px;color:#9ca3af;font-weight:400;letter-spacing:0;text-transform:none;margin-left:6px;">— required for PDF parsing. Saved locally, never shared.</span>
+      </label>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input class="field-input" id="s-apikey" type="password" placeholder="sk-ant-..." style="flex:1;font-family:monospace;">
+        <button onclick="toggleApiKeyVisibility()" style="padding:6px 10px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:3px;cursor:pointer;font-size:11px;color:#6b7280;" id="btn-togglekey">Show</button>
+      </div>
+      <div class="field-hint" style="margin-top:4px;">Get your key at <a href="https://console.anthropic.com" target="_blank" style="color:#b8860b;">console.anthropic.com</a> → API Keys</div>
+    </div>
+  </div>
+  <div class="s-section">
+    <div class="s-title">Size Format</div>
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#374151;font-weight:500;">
+        <input type="radio" name="sizeMode" id="sm-feetinches" value="feetinches" onchange="settings.sizeMode=this.value">
+        <span><strong>Feet &amp; Inches</strong> — e.g. <code style="background:#f3f4f6;padding:1px 5px;border-radius:2px;font-size:11px">2-11 3/4" X 6-11 1/8" X 1-3/4"</code></span>
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#374151;font-weight:500;">
+        <input type="radio" name="sizeMode" id="sm-inches" value="inches" onchange="settings.sizeMode=this.value">
+        <span><strong>Inches Only</strong> — e.g. <code style="background:#f3f4f6;padding:1px 5px;border-radius:2px;font-size:11px">35 3/4" X 83 1/8" X 1-3/4"</code></span>
+      </label>
+    </div>
+    <div class="field-hint" style="margin-top:8px">Throat is always expressed as inches regardless of this setting.</div>
+  </div>
+    <div class="two-col">
+      <div><label class="field-label">Width Deduction (in)</label><input class="field-input" id="s-wDed" type="number" step="0.0625"><div class="field-hint">Default 0.25 = 1/8" each side</div></div>
+      <div><label class="field-label">Height Deduction (in)</label><input class="field-input" id="s-hDed" type="number" step="0.0625"><div class="field-hint">Default 0.875 = 7/8"</div></div>
+    </div>
+  </div>
+  <div class="s-cols">
+    <div>
+      <div class="s-section"><div class="s-title">Hand (Doors)</div><div id="r-handMap"></div></div>
+      <div class="s-section"><div class="s-title">Door Core</div><div id="r-coreMap"></div></div>
+      <div class="s-section"><div class="s-title">Door Undercut</div><div id="r-undercutMap"></div></div>
+      <div class="s-section"><div class="s-title">Elevation → Floor</div><div id="r-elevMap"></div></div>
+    </div>
+    <div>
+      <div class="s-section"><div class="s-title">Hand (Frames)</div><div id="r-frameHandMap"></div></div>
+      <div class="s-section"><div class="s-title">Frame KB</div><div id="r-frameKbMap"></div></div>
+      <div class="s-section"><div class="s-title">Anchor Type</div><div id="r-anchorMap"></div></div>
+    </div>
+  </div>
+
+  <div class="s-section">
+    <div class="s-title">Item Prep Memory
+      <span style="font-size:9px;color:#6b7280;margin-left:8px;letter-spacing:1px;font-weight:normal;">
+        — saved across jobs. each item's prep contribution is remembered once confirmed.
+      </span>
+    </div>
+    <div class="mem-scroll">
+      <table class="mem-table">
+        <thead><tr><th>Item keyword</th><th>Prep contribution</th><th>Category</th><th></th></tr></thead>
+        <tbody id="memRows"></tbody>
+      </table>
+    </div>
+    <div style="margin-top:8px;display:flex;gap:8px;">
+      <button class="btn btn-outline btn-sm" onclick="clearItemMemory()">Clear All Memory</button>
+    </div>
+  </div>
+
+  <button class="btn-save" id="saveBtn" onclick="saveSettings()">Save Settings</button>
+</div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════════
+// DEFAULTS & STATE
+// ══════════════════════════════════════════════════════════════════════
+// ── Built-in API key — pre-populates for shared users, can be overridden in Settings ──
+// Replace the empty string with your key: 'sk-ant-api03-...'
+const BUILT_IN_API_KEY = '';
+
+const DEFAULT_SETTINGS = {
+  po: "", wDeduct: 0.25, hDeduct: 0.875,
+  sizeMode: 'feetinches',
+  apiKey: BUILT_IN_API_KEY,
+  handMap:      { L:"LH", R:"RH", LR:"LHR", RR:"RHR", LH:"LH", RH:"RH", LHR:"LHR", RHR:"RHR" },
+  coreMap:      { PC:"PC", MC:"MC", SCL:"SCL", Polystyrene:"PS", Honeycomb:"HC" },
+  undercutMap:  { "0.75":'3/4"', "1":'1"', "1.375":'1-1/8"' },
+  frameHandMap: { L:"LH", R:"RH", LR:"LHR", RR:"RHR", LH:"LH", RH:"RH", LHR:"LHR", RHR:"RHR",
+                  RRA:"RIGHT REVERSE ACTIVE", LRA:"LEFT REVERSE ACTIVE", BRA:"BOTH REVERSE ACTIVE" },
+  frameKbMap:   { "DW-16-WD":"16GA WELDED", "DW-16-KD":"16GA KD" },
+  anchorMap:    { WWS:"[ ]", PF:"TS", "P+D":"EMA" },
+  elevMap:      { "1F":"1st","2F":"2nd","3F":"3rd","4F":"4th","5F":"5th","6F":"6th","B":"Bsmt","G":"Grnd" }
+};
+
+// Item memory: keyword (uppercase) -> { contrib, category }
+// category: hinge | lock | closer | other | none
+const DEFAULT_ITEM_MEMORY = {
+  "ECBB1100": { contrib: "3-STD HINGES", cat: "hinge" },
+  "ECBB1101": { contrib: "3-STD HINGES", cat: "hinge" },
+  "ECBB1102": { contrib: "3-HW HINGES",  cat: "hinge" },
+  "ECBB1103": { contrib: "3-HW HINGES",  cat: "hinge" },
+  "EC1105":   { contrib: "3-STD HINGES", cat: "hinge" },
+  "SD115":    { contrib: "ASA",  cat: "lock" },
+  "SD116":    { contrib: "ASA",  cat: "lock" },
+  "SD125":    { contrib: "ASA",  cat: "lock" },
+  "SD126":    { contrib: "ASA",  cat: "lock" },
+  "SD148":    { contrib: "ASA",  cat: "lock" },
+  "SD176":    { contrib: "ASA",  cat: "lock" },
+  "6300R ":   { contrib: "PR",   cat: "lock" },
+  "6300RF":   { contrib: "PR-RF",cat: "lock" },
+  "6300MF":   { contrib: "ASA",  cat: "lock" },
+  "6300VLBR": { contrib: "SVR",  cat: "lock" },
+  "6310R":    { contrib: "PR",   cat: "lock" },
+  "KV125":    { contrib: "DL 6\" CTC", cat: "lock" },
+  "5200 X":   { contrib: "DCP",  cat: "closer" },
+  "5200 ":    { contrib: "DCP",  cat: "closer" },
+  "HDCS":     { contrib: "DCP",  cat: "closer" },
+  "283D":     { contrib: "283D FLUSHBOLT", cat: "other" },
+  "291D":     { contrib: "291D FLUSHBOLT", cat: "other" },
+  "CARD READER": { contrib: "",  cat: "none" },
+};
+
+let settings = loadSettings();
+let itemMemory = loadItemMemory();
+
+// Job state
+let xlsxFile = null, pdfFile = null;
+let fileRows = [];       // raw xlsx rows
+let pdfSets  = {};       // { setId: { items: [{desc,qty,act,inact}], opngType } }
+let confirmedSets = {};  // { setId: { prepFor, noPrep:bool } }
+let doorRows = [], frameRows = [];
+let currentFile = "converted";
+
+// ══════════════════════════════════════════════════════════════════════
+// PERSISTENCE
+// ══════════════════════════════════════════════════════════════════════
+function loadSettings() {
+  try {
+    const s = localStorage.getItem("dcv3_settings");
+    return s ? deepMerge(JSON.parse(JSON.stringify(DEFAULT_SETTINGS)), JSON.parse(s)) : JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+  } catch { return JSON.parse(JSON.stringify(DEFAULT_SETTINGS)); }
+}
+function loadItemMemory() {
+  try {
+    const s = localStorage.getItem("dcv3_items");
+    return s ? { ...DEFAULT_ITEM_MEMORY, ...JSON.parse(s) } : { ...DEFAULT_ITEM_MEMORY };
+  } catch { return { ...DEFAULT_ITEM_MEMORY }; }
+}
+function persistSettings() { try { localStorage.setItem("dcv3_settings", JSON.stringify(settings)); } catch {} }
+function persistMemory()   { try { localStorage.setItem("dcv3_items",    JSON.stringify(itemMemory)); } catch {} }
+function deepMerge(t, s) {
+  for (const k in s) {
+    if (s[k] && typeof s[k]==='object' && !Array.isArray(s[k])) { t[k]=t[k]||{}; deepMerge(t[k],s[k]); }
+    else t[k]=s[k];
+  }
+  return t;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// TABS
+// ══════════════════════════════════════════════════════════════════════
+function goTab(t) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-'+t).classList.add('active');
+  document.getElementById('tab-btn-'+t).classList.add('active');
+  if (t === 'settings') renderSettings();
+}
+function enableTab(t) { document.getElementById('tab-btn-'+t).disabled = false; }
+function disableTab(t) { document.getElementById('tab-btn-'+t).disabled = true; }
+function alertTab(t, on) { document.getElementById('tab-btn-'+t).classList.toggle('has-alert', on); }
+
+function resetJob() {
+  // Clear all job state — settings and memory are untouched
+  xlsxFile = null;
+  pdfFile  = null;
+  fileRows = [];
+  pdfSets  = {};
+  confirmedSets = {};
+  doorRows = [];
+  frameRows = [];
+  currentFile = 'converted';
+
+  // Reset dropzones
+  ['xlsx','pdf'].forEach(type => {
+    const dz = document.getElementById('dz-'+type);
+    dz.classList.remove('loaded','drag');
+    // Remove any ✓ check badges
+    dz.querySelectorAll('.dz-check').forEach(el => el.remove());
+    // Reset file input so same file can be re-selected
+    const inp = document.getElementById('inp-'+type);
+    if (inp) inp.value = '';
+  });
+  document.getElementById('xlsx-name').textContent = 'Drop .xlsx file here or click';
+  document.getElementById('xlsx-name').classList.remove('loaded');
+  document.getElementById('pdf-name').textContent  = 'Drop .pdf file here or click';
+  document.getElementById('pdf-name').classList.remove('loaded');
+
+  // Reset parse button and status
+  document.getElementById('btn-parse').disabled = true;
+  document.getElementById('parse-status').textContent = '';
+
+  // Clear result areas
+  document.getElementById('setsGrid').innerHTML = '';
+  document.getElementById('setsSummary').innerHTML = '';
+  document.getElementById('tblDoors').innerHTML = '';
+  document.getElementById('tblFrames').innerHTML = '';
+  document.getElementById('resultSection').classList.add('hidden');
+  ['btnExpDoors','btnExpFrames','btnExpBoth'].forEach(id => {
+    document.getElementById(id)?.classList.add('hidden');
+  });
+
+  // Disable Sets and Convert tabs, clear alerts
+  disableTab('sets');
+  disableTab('convert');
+  alertTab('sets', false);
+
+  // Clear any messages
+  const msg = document.getElementById('upload-msg');
+  if (msg) { msg.className = ''; msg.textContent = ''; }
+
+  // Go back to upload tab
+  goTab('upload');
+}
+function switchSub(t) {
+  ['doors','frames'].forEach(s => {
+    document.getElementById('st-'+s).classList.toggle('active', s===t);
+    document.getElementById('panel-'+s).classList.toggle('hidden', s!==t);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// UPLOAD
+// ══════════════════════════════════════════════════════════════════════
+function dzDrop(e, type) {
+  e.preventDefault();
+  document.getElementById('dz-'+type).classList.remove('drag');
+  acceptFile(e.dataTransfer.files[0], type);
+}
+function dzPick(e, type) { acceptFile(e.target.files[0], type); }
+
+function acceptFile(file, type) {
+  if (!file) return;
+  if (type === 'xlsx') {
+    xlsxFile = file;
+    currentFile = file.name.replace(/\.(xlsx|xls)$/i,"");
+    document.getElementById('xlsx-name').textContent = file.name;
+    document.getElementById('xlsx-name').classList.add('loaded');
+    document.getElementById('dz-xlsx').classList.add('loaded');
+    const chk = document.createElement('div'); chk.className='dz-check'; chk.textContent='✓';
+    document.getElementById('dz-xlsx').appendChild(chk);
+  } else {
+    pdfFile = file;
+    document.getElementById('pdf-name').textContent = file.name;
+    document.getElementById('pdf-name').classList.add('loaded');
+    document.getElementById('dz-pdf').classList.add('loaded');
+    const chk = document.createElement('div'); chk.className='dz-check'; chk.textContent='✓';
+    document.getElementById('dz-pdf').appendChild(chk);
+  }
+  document.getElementById('btn-parse').disabled = !xlsxFile;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// PARSE FILES
+// ══════════════════════════════════════════════════════════════════════
+async function parseFiles() {
+  const status = document.getElementById('parse-status');
+  status.textContent = 'Reading xlsx...';
+  try {
+    fileRows = await readXlsx(xlsxFile);
+
+    if (pdfFile) {
+      status.textContent = `${fileRows.length} rows loaded. Sending PDF to AI for parsing...`;
+      pdfSets = await parsePdf(pdfFile);
+      const setCount = Object.keys(pdfSets).length;
+      status.textContent = `✓ ${fileRows.length} rows · ${setCount} hardware sets extracted`;
+      enableTab('sets');
+      enableTab('convert');
+      buildSetsUI();
+      goTab('sets');
+    } else {
+      status.textContent = `✓ ${fileRows.length} rows loaded — no PDF, skipping hardware sets`;
+      pdfSets = {};
+      enableTab('convert');
+      goTab('convert');
+    }
+  } catch(err) {
+    showMsg('upload-msg', 'error', 'Parse error: ' + err.message);
+    status.textContent = '';
+  }
+}
+
+function readXlsx(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = e => {
+      try {
+        const wb = XLSX.read(e.target.result, {type:'array'});
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const raw = XLSX.utils.sheet_to_json(ws, {header:1, defval:""});
+        let hi = raw.findIndex(row => row.some(c => String(c).trim()==='OpngNumbers'));
+        if (hi===-1) hi=0;
+        const hdrs = raw[hi].map(h=>String(h).trim());
+        const rows = raw.slice(hi+1).map(row => {
+          const o={}; hdrs.forEach((h,i)=>{ o[h]=row[i]??""; }); return o;
+        });
+        res(rows);
+      } catch(err) { rej(err); }
+    };
+    r.onerror = rej;
+    r.readAsArrayBuffer(file);
+  });
+}
+
+// ── PDF Parser — uses Anthropic API to read compressed PDFs reliably ──
+function parsePdf(file) {
+  return new Promise((res, rej) => {
+    const reader = new FileReader();
+    reader.onload = async e => {
+      try {
+        const bytes = new Uint8Array(e.target.result);
+        let binary = '';
+        // Use chunked approach to avoid call stack overflow on large files
+        const chunkSize = 8192;
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+          binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+        }
+        const base64 = btoa(binary);
+
+        console.log('Sending PDF to API:', file.name, 'size:', file.size, 'bytes');
+
+        const apiKey = settings.apiKey || BUILT_IN_API_KEY || '';
+        if (!apiKey) throw new Error('No API key set — add your Anthropic API key in Settings first.');
+
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 8000,
+            messages: [{
+              role: 'user',
+              content: [
+                {
+                  type: 'document',
+                  source: { type: 'base64', media_type: 'application/pdf', data: base64 }
+                },
+                {
+                  type: 'text',
+                  text: `This is a door hardware schedule PDF. Extract ALL hardware sets from it.
+
+Look for sections that start with "Architect Set Heading #" or similar headings. Each section lists hardware items (hinges, locks, closers, stops, gaskets, etc.) for a group of openings.
+
+Return ONLY a raw JSON object. No explanation. No markdown. Start immediately with { and end with }.
+
+Format:
+{"sets":{"05":{"opngType":"SNGL","items":[{"desc":"4-1/2 Std Wt(.134) Hinge ECBB1100 4 1/2'' x 4 1/2''","qty":3},{"desc":"Cylindrical Lever SD115 x MIA x N x V21900-711-D x SCC","qty":1}]}}}
+
+Rules:
+- Set ID: text after "Heading #", strip trailing ".00" or ".0"  
+- opngType: SNGL, PAIR, or UNPR
+- items: hardware items ONLY — hinges, levers, locks, closers, stops, kickplates, gaskets, sweeps, viewers, push pads, flush bolts, coordinators
+- EXCLUDE: door sizes, hand designations, location names, floor numbers, frame/door material descriptions
+- qty: the first number on the hardware item line
+- Include every set found`
+                }
+              ]
+            }]
+          })
+        });
+
+        const data = await response.json();
+        console.log('API status:', response.status);
+        console.log('API response keys:', Object.keys(data));
+
+        if (!response.ok) throw new Error(data.error?.message || `API error ${response.status}`);
+
+        // Handle response — content can be array of blocks
+        let textContent = '';
+        if (Array.isArray(data.content)) {
+          textContent = data.content.filter(b => b.type === 'text').map(b => b.text).join('');
+        } else if (typeof data.content === 'string') {
+          textContent = data.content;
+        }
+
+        console.log('Response text (first 400):', textContent.slice(0, 400));
+
+        if (!textContent) throw new Error('Empty response from API');
+
+        // Extract JSON — find outermost { } 
+        const firstBrace = textContent.indexOf('{');
+        const lastBrace  = textContent.lastIndexOf('}');
+        if (firstBrace === -1) throw new Error('No JSON object in response: ' + textContent.slice(0, 200));
+
+        const jsonStr = textContent.slice(firstBrace, lastBrace + 1);
+        console.log('JSON to parse (first 300):', jsonStr.slice(0, 300));
+        console.log('stop_reason:', data.stop_reason);
+
+        let parsed;
+        try {
+          parsed = JSON.parse(jsonStr);
+        } catch(parseErr) {
+          // Truncated JSON — try to salvage complete sets by cutting at last valid set boundary
+          console.warn('JSON parse failed, attempting repair. Error at:', parseErr.message);
+          const repaired = repairTruncatedJson(jsonStr);
+          console.log('Repaired JSON sets count:', Object.keys(repaired.sets||{}).length);
+          parsed = repaired;
+        }
+
+        const sets = parsed.sets || {};
+        console.log('Sets found:', Object.keys(sets).length, Object.keys(sets).slice(0, 10));
+        res(sets);
+
+      } catch(err) {
+        console.error('parsePdf error:', err);
+        rej(err);
+      }
+    };
+    reader.onerror = rej;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function repairTruncatedJson(str) {
+  // Find all complete set entries using regex — each looks like "KEY": { ... }
+  // We extract only fully-closed set objects
+  const sets = {};
+  // Match "setId": { "opngType": "...", "items": [ ... ] }
+  // A complete set ends with ]} and then either , or }
+  const setRe = /"([\w.]+)"\s*:\s*\{[^{}]*"opngType"\s*:\s*"(\w+)"[^{}]*"items"\s*:\s*\[([\s\S]*?)\]\s*\}/g;
+  let m;
+  while ((m = setRe.exec(str)) !== null) {
+    const sid = m[1];
+    const opngType = m[2];
+    const itemsStr = m[3];
+    // Parse items from the matched items array string
+    const items = [];
+    const itemRe = /\{\s*"desc"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*"qty"\s*:\s*(\d+)\s*\}/g;
+    let im;
+    while ((im = itemRe.exec(itemsStr)) !== null) {
+      items.push({ desc: im[1].replace(/\\"/g, '"').replace(/\\'/g, "'"), qty: parseInt(im[2]) });
+    }
+    if (items.length > 0) sets[sid] = { opngType, items };
+  }
+  return { sets };
+}
+
+function parseHardwareSets(text) {
+  const sets = {};
+  const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
+
+  // Known hardware manufacturers — only lines ending with these are hardware items
+  const MFR = /\b(Hager|Pdq|Pemko|Rockwood|By Others)\b/i;
+
+  // Door/frame parameters that are NOT hardware items — blocklist
+  const NOT_HARDWARE = [
+    /^Plastic Laminate/i,
+    /^Polystyrene/i,
+    /^Honeycomb/i,
+    /^Hollow Core/i,
+    /^Solid Core/i,
+    /^Steel Core/i,
+    /^Wood Door/i,
+    /^Hollow Metal/i,
+    /^Paint Grade/i,
+    /^Birch/i,
+    /^Oak/i,
+    /^Maple/i,
+    /^Flush/i,
+    /^Vision Lite/i,
+    /^Louvered/i,
+    /^PC$|^MC$|^SCL$|^HM$|^WD$|^PS$|^HC$/i,  // core/material abbreviations
+  ];
+
+  // Words that indicate an opening schedule header line — skip these
+  const SKIP_PATTERNS = [
+    /^\d+'-\d+"/,
+    /\bSNGL\b|\bPAIR\b|\bUNPR\b/,
+    /\bFloor\b.*\bBldg\b/i,
+    /^(Number|Qty|Location|Frame|Label|Door Size|Hand|Type|Bldg|Floor|Note|Act|Inact)$/i,
+    /^Architect Set Heading/i,
+    /^[A-Z]{2,}-\d+/,
+    /^\d{2,4}\s+(L|R|LR|RR|RRA|LRA|BRA)\s+\d/,
+    /\b(Corridor|Restroom|Storage|Laundry|Mechanical|Electrical|Stair|Office|Lobby|Entry|Bath|Guest)\b/i,
+    /\bHM\b.*\bWD\b|\bWD\b.*\bHM\b/,
+    /^\d+x\d+|\d+'\s*\/\s*\d+/,
+    /Hospitality Openings Page/i,
+    /^LSHAL|^LQRVA/i,
+    /^\d{4}\/\d{2}\/\d{2}|^\d+\/\d+\/\d+/,
+  ];
+
+  let currentSet = null;
+  let inItemSection = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // ── Detect set heading ──────────────────────────────────────────
+    const headMatch = line.match(/Architect\s+Set\s+Heading\s+#\s*([\w.]+)/i);
+    if (headMatch) {
+      currentSet = headMatch[1].trim().replace(/\.00$/, '').replace(/\.0$/, '');
+      if (!sets[currentSet]) sets[currentSet] = { items: [], opngType: 'SNGL' };
+      inItemSection = false;
+      continue;
+    }
+
+    if (!currentSet) continue;
+
+    // ── Detect opening type ─────────────────────────────────────────
+    if (!inItemSection) {
+      if (/\bSNGL\b/.test(line)) sets[currentSet].opngType = 'SNGL';
+      if (/\bPAIR\b/.test(line)) sets[currentSet].opngType = 'PAIR';
+      if (/\bUNPR\b/.test(line)) sets[currentSet].opngType = 'UNPR';
+    }
+
+    // ── Detect start of item section ────────────────────────────────
+    if (/Qty\s+Act|Description\s+Finish\s+Mfgr/i.test(line)) {
+      inItemSection = true;
+      continue;
+    }
+
+    if (!inItemSection) continue;
+
+    // ── Skip header/parameter lines ─────────────────────────────────
+    if (SKIP_PATTERNS.some(p => p.test(line))) continue;
+
+    // ── Must reference a known manufacturer ─────────────────────────
+    if (!MFR.test(line)) continue;
+
+    // ── Parse: Qty ... Finish ActQty Model Mfgr Code ────────────────
+    const itemMatch = line.match(
+      /^(\d+)\s+(.+?)\s+(US\d+\w*|ALM|CRM|BL|C|A|LS|---|\d{3}\/\d+)\s+\d+\s+(.+?)\s+(Hager|Pdq|Pemko|Rockwood|By Others)\s+\w+$/i
+    );
+    if (itemMatch) {
+      const qty  = parseInt(itemMatch[1]) || 1;
+      const desc = itemMatch[4].trim();
+      if (desc.length > 2
+        && !NOT_HARDWARE.some(p => p.test(desc))
+        && !sets[currentSet].items.find(x => x.desc === desc)) {
+        sets[currentSet].items.push({ desc, qty });
+      }
+      continue;
+    }
+
+    // ── Simpler fallback ─────────────────────────────────────────────
+    const simpleMatch = line.match(
+      /^(\d+)\s+(.+?)\s+(Hager|Pdq|Pemko|Rockwood|By Others)\s+[\w]+$/i
+    );
+    if (simpleMatch) {
+      const qty  = parseInt(simpleMatch[1]) || 1;
+      const desc = simpleMatch[2].trim();
+      if (desc.length > 4
+        && !NOT_HARDWARE.some(p => p.test(desc))
+        && !/^\d+'-|^[A-Z]{2,}-\d+|SNGL|PAIR|UNPR|HM |WD /i.test(desc)) {
+        if (!sets[currentSet].items.find(x => x.desc === desc)) {
+          sets[currentSet].items.push({ desc, qty });
+        }
+      }
+    }
+  }
+
+  // ── Fallback: build from xlsx if PDF yielded nothing ────────────────
+  const anyItems = Object.values(sets).some(s => s.items.length > 0);
+  if (!anyItems) {
+    fileRows.forEach(r => {
+      const sid = String(r.HdweSetID || '').trim();
+      if (!sid || sid === '---') return;
+      if (!sets[sid]) sets[sid] = { items: [], opngType: String(r.OpngType || 'SNGL').trim() };
+      const face = String(r.DoorFace || '').trim();
+      if (face && face !== '---' && face !== 'NaN' && !NOT_HARDWARE.some(p => p.test(face))) {
+        if (!sets[sid].items.find(x => x.desc === face)) {
+          sets[sid].items.push({ desc: face, qty: 1 });
+        }
+      }
+    });
+  }
+
+  return sets;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// ITEM CLASSIFICATION
+// ══════════════════════════════════════════════════════════════════════
+function classifyItem(desc) {
+  const u = desc.toUpperCase();
+  // Check memory first
+  for (const [kw, mem] of Object.entries(itemMemory)) {
+    if (u.includes(kw.toUpperCase())) {
+      return { contrib: mem.contrib, cat: mem.cat, kw, fromMemory: true };
+    }
+  }
+  // Rule-based fallback
+  if (/ECBB110[23]|HVY\s*WT|\.180/.test(u)) return { contrib:'3-HW HINGES', cat:'hinge', kw:null, fromMemory:false };
+  if (/ECBB110[01]|STD\s*WT|\.134|EC1105|SPRING HINGE/.test(u)) return { contrib:'3-STD HINGES', cat:'hinge', kw:null, fromMemory:false };
+  if (/6300VLBR|SVR/.test(u)) return { contrib:'SVR', cat:'lock', kw:null, fromMemory:false };
+  if (/6300RF/.test(u)) return { contrib:'PR-RF', cat:'lock', kw:null, fromMemory:false };
+  if (/6300R|6310R|PUSH PAD.*RIM|RIM.*PUSH/.test(u)) return { contrib:'PR', cat:'lock', kw:null, fromMemory:false };
+  if (/6300MF|MORTISE.*PAD/.test(u)) return { contrib:'ASA', cat:'lock', kw:null, fromMemory:false };
+  if (/KV125|DEADLOCK/.test(u)) return { contrib:'DL 6" CTC', cat:'lock', kw:null, fromMemory:false };
+  if (/SD1\d\d|CYLINDRICAL LEVER|PRIVACY SET/.test(u)) return { contrib:'ASA', cat:'lock', kw:null, fromMemory:false };
+  if (/283D/.test(u)) return { contrib:'283D FLUSHBOLT', cat:'other', kw:null, fromMemory:false };
+  if (/291D/.test(u)) return { contrib:'291D FLUSHBOLT', cat:'other', kw:null, fromMemory:false };
+  if (/HDCS|PARALLEL ARM/.test(u)) return { contrib:'DCP', cat:'closer', kw:null, fromMemory:false };
+  if (/CLOSER|5200/.test(u)) return { contrib:'DCP', cat:'closer', kw:null, fromMemory:false };
+  if (/CARD READER/.test(u)) return { contrib:'', cat:'none', kw:null, fromMemory:false };
+  return { contrib: null, cat:'other', kw:null, fromMemory:false }; // unknown
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// ASSEMBLE PREP FOR FROM CLASSIFIED ITEMS
+// ══════════════════════════════════════════════════════════════════════
+function assemblePrepFor(items, opngType) {
+  if (!items || items.length === 0) return '';
+  const classified = items.map(it => ({ ...it, ...classifyItem(it.desc) }));
+  const multi = opngType==='PAIR' || opngType==='UNPR';
+
+  // Special flush bolt overrides
+  const has291 = classified.some(c=>c.contrib==='291D FLUSHBOLT');
+  const has283 = classified.some(c=>c.contrib==='283D FLUSHBOLT');
+  const hasSVR = classified.some(c=>c.contrib==='SVR');
+
+  // Hinge segment
+  const hingeItem = classified.find(c=>c.cat==='hinge');
+  const hingeStr  = hingeItem ? hingeItem.contrib : '3-STD HINGES';
+  const seg1 = multi ? `EACH LEG ${hingeStr}` : hingeStr;
+
+  if (has291) return [...[`${seg1}, 2X DCP, 291D FLUSHBOLT ON INACTIVE`], ...classified.filter(c=>c.cat==='append'&&c.contrib).map(c=>c.contrib)].join(', ');
+  if (hasSVR) return [...[`${seg1}, 2X SVR, 2X DCP`], ...classified.filter(c=>c.cat==='append'&&c.contrib).map(c=>c.contrib)].join(', ');
+  if (has283) return [...[`${seg1}, DCP ON ACTIVE, 283D FLUSHBOLT ON INACTIVE`], ...classified.filter(c=>c.cat==='append'&&c.contrib).map(c=>c.contrib)].join(', ');
+
+  // Lock segment
+  const lockItem = classified.find(c=>c.cat==='lock');
+  let seg2 = 'ASA';
+  let lockSuffix = '';
+  if (lockItem) {
+    if (lockItem.contrib === 'PR' || lockItem.contrib === 'PR-RF') seg2 = 'PR';
+    else seg2 = lockItem.contrib || 'ASA';
+  }
+
+  // Closer segment
+  const closerItem = classified.find(c=>c.cat==='closer');
+  const hasCardReader = classified.some(c=>c.cat==='none' && c.desc.toUpperCase().includes('CARD'));
+  const hasPrivacy    = classified.some(c=>c.desc.toUpperCase().includes('PRIVACY') || c.desc.toUpperCase().includes('SD176'));
+  const heavyHinge    = hingeStr === '3-HW HINGES';
+  const isRimRF       = lockItem && lockItem.contrib === 'PR-RF';
+  const isDeadlock    = lockItem && lockItem.contrib && lockItem.contrib.includes('DL');
+
+  let seg3 = '';
+  if (isDeadlock) {
+    seg3 = lockItem.contrib; // e.g. "DL 6\" CTC"
+    return [seg1, seg2==='ASA'?'ASA':'', seg3].filter(Boolean).join(', ');
+  }
+  if (closerItem) {
+    if (isRimRF || hasPrivacy)    seg3 = 'DC';
+    else if (hasCardReader)       seg3 = 'DC';
+    else if (heavyHinge && seg2==='ASA') seg3 = 'DC';
+    else                           seg3 = 'DCP';
+    // Parallel arm / exterior always DCP
+    if (closerItem.contrib==='DCP' && closerItem.desc && /HDCS|PARALLEL/i.test(closerItem.desc)) seg3='DCP';
+  }
+
+  // Collect all append-category items — always added to end in order
+  const appendItems = classified.filter(c => c.cat === 'append' && c.contrib);
+
+  // For deadlock sets, seg2 is already in DL string
+  const parts = [seg1, seg2, seg3, ...appendItems.map(c => c.contrib)].filter(Boolean);
+  return parts.join(', ');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// BUILD SETS UI
+// ══════════════════════════════════════════════════════════════════════
+function buildSetsUI() {
+  const grid = document.getElementById('setsGrid');
+  grid.innerHTML = '';
+  confirmedSets = {};
+
+  // Build opening lookup: setId -> [{opng, loc, floor, hand, size}]
+  const setOpenings = {};
+  fileRows.forEach(r => {
+    const sid = String(r.HdweSetID || '').trim();
+    if (!sid || sid === '---') return;
+    if (!setOpenings[sid]) setOpenings[sid] = [];
+    setOpenings[sid].push({
+      opng:  String(r.OpngNumbers || '').trim(),
+      loc:   String(r.Loc1 || '').trim(),
+      floor: String(r.Floor || r.Elevation || '').trim(),
+      hand:  String(r.Hand || '').trim(),
+      qty:   parseInt(r.Qty) || 1,
+    });
+  });
+
+  let autoCount=0, reviewCount=0;
+
+  Object.entries(pdfSets).sort(([a],[b])=>a.localeCompare(b,undefined,{numeric:true})).forEach(([sid, setData]) => {
+    const items   = setData.items;
+    const opng    = setData.opngType;
+    const openings = setOpenings[sid] || [];
+
+    // Classify each item
+    const classified = items.map(it => ({ desc: it.desc, qty: it.qty||1, ...classifyItem(it.desc) }));
+    const unknowns   = classified.filter(c => c.contrib === null);
+    const needsReview = unknowns.length > 0;
+
+    const autoPrepFor = assemblePrepFor(items, opng);
+
+    if (needsReview) reviewCount++;
+    else { autoCount++; confirmedSets[sid] = { prepFor: autoPrepFor, noPrep: false }; }
+
+    const card = document.createElement('div');
+    card.className = `set-card ${needsReview ? 'needs-review' : 'confirmed'}`;
+    card.id = `set-card-${sid}`;
+
+    const statusHtml = needsReview
+      ? `<span class="set-status status-review">⚠ Review</span>`
+      : `<span class="set-status status-auto">✓ Auto</span>`;
+
+    const itemCount    = items.length;
+    const unknownCount = unknowns.length;
+
+    // ── Items section ──────────────────────────────────────────────
+    const itemsHtml = classified.map(c => {
+      const chipClass = c.contrib===null ? 'chip-new' :
+                        c.cat==='hinge'  ? 'chip-hinge' :
+                        c.cat==='lock'   ? 'chip-lock' :
+                        c.cat==='closer' ? 'chip-closer' : c.cat==='append' ? 'chip-append' : 'chip-other';
+      const chipLabel = c.contrib===null ? '? Unknown' :
+                        c.contrib===''   ? 'no prep' : c.contrib;
+      const memDot = c.fromMemory
+        ? `<span style="color:#15803d;margin-right:4px;font-size:11px" title="from memory">●</span>`
+        : `<span style="color:#d1d5db;margin-right:4px;font-size:11px" title="new item">○</span>`;
+      const qtyBadge = c.qty > 1
+        ? `<span style="font-size:10px;color:#9ca3af;margin-right:4px">×${c.qty}</span>`
+        : '';
+
+      // Unknown items get an inline editor instead of a static chip
+      if (c.contrib === null) {
+        const inputId = `unknown-${sid}-${c.desc.replace(/[^a-z0-9]/gi,'_').slice(0,20)}`;
+        unknownStore[inputId] = { sid, desc: c.desc };
+        return `<div class="item-row" style="flex-wrap:wrap;gap:4px;">
+          ${memDot}${qtyBadge}<span class="item-desc">${escHtml(c.desc)}</span>
+          <div style="display:flex;align-items:center;gap:4px;margin-left:auto;">
+            <input id="${inputId}"
+              placeholder="e.g. ASA, DCP, 3-STD HINGES"
+              style="font-size:10px;padding:3px 7px;border:1px solid #fca5a5;border-radius:3px;width:180px;font-family:inherit;background:#fff8f8;color:#1a1e2e;"
+              onkeydown="if(event.key==='Enter')saveUnknown('${inputId}')">
+            <select id="${inputId}-cat"
+              style="font-size:10px;padding:3px 5px;border:1px solid #d1d5db;border-radius:3px;font-family:inherit;background:#fff;">
+              <option value="hinge">hinge</option>
+              <option value="lock">lock</option>
+              <option value="closer">closer</option>
+              <option value="other" selected>other</option>
+              <option value="none">none</option>
+              <option value="append">append</option>
+            </select>
+            <button onclick="saveUnknown('${inputId}')"
+              style="font-size:10px;padding:3px 10px;background:#15803d;color:#fff;border:none;border-radius:3px;cursor:pointer;font-family:inherit;font-weight:700;">
+              Save
+            </button>
+          </div>
+        </div>`;
+      }
+
+      return `<div class="item-row">
+        ${memDot}${qtyBadge}<span class="item-desc">${escHtml(c.desc)}</span>
+        <span class="item-chip ${chipClass}">${escHtml(chipLabel)}</span>
+      </div>`;
+    }).join('') || `<span style="color:#9ca3af;font-size:12px;font-style:italic">No hardware items parsed from PDF</span>`;
+
+    // ── Openings section ───────────────────────────────────────────
+    const totalQty = openings.reduce((s, o) => s + o.qty, 0);
+    const openingsHtml = openings.length
+      ? openings.map(o => `
+          <div style="display:flex;align-items:baseline;gap:6px;padding:3px 0;border-bottom:1px solid #f0f2f5;font-size:11px;">
+            <span style="font-weight:700;color:#1a1e2e;min-width:60px">${escHtml(o.opng)}</span>
+            <span style="color:#6b7280;flex:1">${escHtml(o.loc)}</span>
+            <span style="color:#9ca3af;font-size:10px">${escHtml(o.hand)}</span>
+            ${o.qty > 1 ? `<span style="color:#b8860b;font-size:10px;font-weight:700">×${o.qty}</span>` : ''}
+          </div>`).join('')
+      : `<span style="color:#9ca3af;font-size:11px;font-style:italic">No openings found in schedule</span>`;
+
+    card.innerHTML = `
+      <div class="set-card-header">
+        <div>
+          <span class="set-id">${escHtml(sid)}</span>
+          <span class="set-opng">${opng}</span>
+          <span style="font-size:10px;color:#9ca3af;margin-left:10px;font-weight:600">${itemCount} item${itemCount!==1?'s':''}</span>
+          ${unknownCount ? `<span style="font-size:10px;color:#b91c1c;margin-left:6px;font-weight:700">· ${unknownCount} unknown</span>` : ''}
+          <span style="font-size:10px;color:#9ca3af;margin-left:10px">·</span>
+          <span style="font-size:10px;color:#9ca3af;margin-left:6px;font-weight:600">${openings.length} opening${openings.length!==1?'s':''}</span>
+          ${totalQty !== openings.length ? `<span style="font-size:10px;color:#b8860b;margin-left:4px;font-weight:700">(${totalQty} total qty)</span>` : ''}
+        </div>
+        ${statusHtml}
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid #f0f2f5;">
+
+        <div style="padding:10px 14px;border-right:1px solid #f0f2f5;">
+          <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#9ca3af;font-weight:600;margin-bottom:8px">Hardware Items</div>
+          ${itemsHtml}
+        </div>
+
+        <div style="padding:10px 14px;">
+          <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#9ca3af;font-weight:600;margin-bottom:8px">Openings Using This Set</div>
+          <div style="max-height:160px;overflow-y:auto;">${openingsHtml}</div>
+        </div>
+
+      </div>
+
+      <div class="set-prep-area">
+        <div class="prep-label">PREP FOR</div>
+        <input class="prep-input" id="prep-${sid}" value="${escHtml(autoPrepFor)}" placeholder="Enter PREP FOR text...">
+        <div class="prep-actions">
+          <button class="confirm-btn" onclick="confirmSet('${sid}')">✓ Confirm</button>
+          <button class="no-prep-btn" onclick="noPrepSet('${sid}')">No Prep Needed</button>
+          ${needsReview && unknowns.length ? `<span style="font-size:10px;color:#e67e22;margin-left:6px">${unknowns.length} unknown item${unknowns.length>1?'s':''} — review before confirming</span>` : ''}
+        </div>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+
+  // Summary
+  const total = Object.keys(pdfSets).length;
+  document.getElementById('setsSummary').innerHTML = `
+    <div class="sum-item"><div class="sum-val">${total}</div><div class="sum-lbl">Total Sets</div></div>
+    <div class="sum-item"><div class="sum-val" style="color:#4caf50">${autoCount}</div><div class="sum-lbl">Auto-Ready</div></div>
+    <div class="sum-item"><div class="sum-val" style="color:#e67e22">${reviewCount}</div><div class="sum-lbl">Need Review</div></div>
+    <div class="sum-item"><div class="sum-val" style="color:#5dade2">${Object.keys(itemMemory).length}</div><div class="sum-lbl">Items in Memory</div></div>
+  `;
+
+  alertTab('sets', reviewCount > 0);
+}
+
+// Rebuild a single set card in place after item memory update
+function rebuildCard(sid) {
+  const setData  = pdfSets[sid];
+  if (!setData) return;
+  const items    = setData.items;
+  const opng     = setData.opngType;
+  const openings = (function() {
+    const r = [];
+    fileRows.forEach(row => {
+      if (String(row.HdweSetID||'').trim() === sid) {
+        r.push({
+          opng:  String(row.OpngNumbers||'').trim(),
+          loc:   String(row.Loc1||'').trim(),
+          hand:  String(row.Hand||'').trim(),
+          qty:   parseInt(row.Qty)||1,
+        });
+      }
+    });
+    return r;
+  })();
+
+  const classified   = items.map(it => ({ desc:it.desc, qty:it.qty||1, ...classifyItem(it.desc) }));
+  const unknowns     = classified.filter(c => c.contrib === null);
+  const needsReview  = unknowns.length > 0;
+  const autoPrepFor  = assemblePrepFor(items, opng);
+
+  // Update confirmed state
+  if (!needsReview) {
+    confirmedSets[sid] = { prepFor: autoPrepFor, noPrep: false };
+  } else {
+    delete confirmedSets[sid];
+  }
+
+  // Re-render just this card using the existing card element
+  const card = document.getElementById(`set-card-${sid}`);
+  if (!card) return;
+  card.className = `set-card ${needsReview ? 'needs-review' : 'confirmed'}`;
+
+  const statusHtml = needsReview
+    ? `<span class="set-status status-review">⚠ Review</span>`
+    : `<span class="set-status status-auto">✓ Auto</span>`;
+
+  const itemCount = items.length, unknownCount = unknowns.length;
+
+  const itemsHtml = classified.map(c => {
+    const chipClass = c.contrib===null ? 'chip-new' :
+                      c.cat==='hinge'  ? 'chip-hinge' :
+                      c.cat==='lock'   ? 'chip-lock'  :
+                      c.cat==='closer' ? 'chip-closer' : c.cat==='append' ? 'chip-append' : 'chip-other';
+    const memDot = c.fromMemory
+      ? `<span style="color:#15803d;margin-right:4px;font-size:11px" title="from memory">●</span>`
+      : `<span style="color:#d1d5db;margin-right:4px;font-size:11px" title="new item">○</span>`;
+    const qtyBadge = c.qty > 1 ? `<span style="font-size:10px;color:#9ca3af;margin-right:4px">×${c.qty}</span>` : '';
+
+    if (c.contrib === null) {
+      const inputId = `unknown-${sid}-${c.desc.replace(/[^a-z0-9]/gi,'_').slice(0,20)}`;
+      unknownStore[inputId] = { sid, desc: c.desc };
+      return `<div class="item-row" style="flex-wrap:wrap;gap:4px;">
+        ${memDot}${qtyBadge}<span class="item-desc">${escHtml(c.desc)}</span>
+        <div style="display:flex;align-items:center;gap:4px;margin-left:auto;">
+          <input id="${inputId}" placeholder="e.g. ASA, DCP, 3-STD HINGES"
+            style="font-size:10px;padding:3px 7px;border:1px solid #fca5a5;border-radius:3px;width:180px;font-family:inherit;background:#fff8f8;color:#1a1e2e;"
+            onkeydown="if(event.key==='Enter')saveUnknown('${inputId}')">
+          <select id="${inputId}-cat" style="font-size:10px;padding:3px 5px;border:1px solid #d1d5db;border-radius:3px;font-family:inherit;background:#fff;">
+            <option value="hinge">hinge</option><option value="lock">lock</option>
+            <option value="closer">closer</option><option value="other" selected>other</option>
+            <option value="none">none</option><option value="append">append</option>
+          </select>
+          <button onclick="saveUnknown('${inputId}')"
+            style="font-size:10px;padding:3px 10px;background:#15803d;color:#fff;border:none;border-radius:3px;cursor:pointer;font-family:inherit;font-weight:700;">Save</button>
+        </div>
+      </div>`;
+    }
+    return `<div class="item-row">
+      ${memDot}${qtyBadge}<span class="item-desc">${escHtml(c.desc)}</span>
+      <span class="item-chip ${chipClass}">${escHtml(c.contrib===''?'no prep':c.contrib)}</span>
+    </div>`;
+  }).join('') || `<span style="color:#9ca3af;font-size:12px;font-style:italic">No hardware items parsed from PDF</span>`;
+
+  const totalQty = openings.reduce((s,o) => s+o.qty, 0);
+  const openingsHtml = openings.length
+    ? openings.map(o => `<div style="display:flex;align-items:baseline;gap:6px;padding:3px 0;border-bottom:1px solid #f0f2f5;font-size:11px;">
+        <span style="font-weight:700;color:#1a1e2e;min-width:60px">${escHtml(o.opng)}</span>
+        <span style="color:#6b7280;flex:1">${escHtml(o.loc)}</span>
+        <span style="color:#9ca3af;font-size:10px">${escHtml(o.hand)}</span>
+        ${o.qty>1?`<span style="color:#b8860b;font-size:10px;font-weight:700">×${o.qty}</span>`:''}
+      </div>`).join('')
+    : `<span style="color:#9ca3af;font-size:11px;font-style:italic">No openings found</span>`;
+
+  card.innerHTML = `
+    <div class="set-card-header">
+      <div>
+        <span class="set-id">${escHtml(sid)}</span>
+        <span class="set-opng">${opng}</span>
+        <span style="font-size:10px;color:#9ca3af;margin-left:10px;font-weight:600">${itemCount} item${itemCount!==1?'s':''}</span>
+        ${unknownCount?`<span style="font-size:10px;color:#b91c1c;margin-left:6px;font-weight:700">· ${unknownCount} unknown</span>`:''}
+        <span style="font-size:10px;color:#9ca3af;margin-left:10px">·</span>
+        <span style="font-size:10px;color:#9ca3af;margin-left:6px;font-weight:600">${openings.length} opening${openings.length!==1?'s':''}</span>
+        ${totalQty!==openings.length?`<span style="font-size:10px;color:#b8860b;margin-left:4px;font-weight:700">(${totalQty} total qty)</span>`:''}
+      </div>
+      ${statusHtml}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid #f0f2f5;">
+      <div style="padding:10px 14px;border-right:1px solid #f0f2f5;">
+        <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#9ca3af;font-weight:600;margin-bottom:8px">Hardware Items</div>
+        ${itemsHtml}
+      </div>
+      <div style="padding:10px 14px;">
+        <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#9ca3af;font-weight:600;margin-bottom:8px">Openings Using This Set</div>
+        <div style="max-height:160px;overflow-y:auto;">${openingsHtml}</div>
+      </div>
+    </div>
+    <div class="set-prep-area">
+      <div class="prep-label">PREP FOR</div>
+      <input class="prep-input" id="prep-${sid}" value="${escHtml(autoPrepFor)}" placeholder="Enter PREP FOR text...">
+      <div class="prep-actions">
+        <button class="confirm-btn" onclick="confirmSet('${sid}')">✓ Confirm</button>
+        <button class="no-prep-btn" onclick="noPrepSet('${sid}')">No Prep Needed</button>
+        ${needsReview&&unknownCount?`<span style="font-size:10px;color:#e67e22;margin-left:6px">${unknownCount} unknown — save above then confirm</span>`:''}
+      </div>
+    </div>`;
+
+  // Update summary counts
+  updateSummary();
+}
+
+function updateSummary() {
+  const total    = Object.keys(pdfSets).length;
+  const autoC    = Object.keys(confirmedSets).length;
+  const reviewC  = Object.keys(pdfSets).filter(sid => {
+    const card = document.getElementById(`set-card-${sid}`);
+    return card && card.classList.contains('needs-review');
+  }).length;
+  document.getElementById('setsSummary').innerHTML = `
+    <div class="sum-item"><div class="sum-val">${total}</div><div class="sum-lbl">Total Sets</div></div>
+    <div class="sum-item"><div class="sum-val" style="color:#15803d">${autoC}</div><div class="sum-lbl">Auto-Ready</div></div>
+    <div class="sum-item"><div class="sum-val" style="color:#e67e22">${reviewC}</div><div class="sum-lbl">Need Review</div></div>
+    <div class="sum-item"><div class="sum-val" style="color:#1d4ed8">${Object.keys(itemMemory).length}</div><div class="sum-lbl">Items in Memory</div></div>`;
+  alertTab('sets', reviewC > 0);
+}
+
+// Store for unknown item inline editors — keyed by inputId
+const unknownStore = {};
+
+function saveUnknown(inputId) {
+  const store = unknownStore[inputId];
+  if (!store) return;
+  const { sid, desc } = store;
+
+  const contrib = (document.getElementById(inputId)?.value || '').trim();
+  const cat     = document.getElementById(inputId + '-cat')?.value || 'other';
+  if (!contrib && cat !== 'none') {
+    document.getElementById(inputId).style.borderColor = '#ef4444';
+    return;
+  }
+
+  // Extract best keyword from desc — model number takes priority
+  const modelMatch = desc.match(/\b([A-Z]{2,5}\d{2,}[\w-]*|\d{3,}[A-Z][\w-]*)\b/i);
+  const kw = modelMatch ? modelMatch[1].toUpperCase() : desc.split(/\s+/).slice(0,3).join(' ').toUpperCase();
+
+  itemMemory[kw] = { contrib: contrib || '', cat };
+  persistMemory();
+  rebuildCard(sid);
+}
+
+function confirmSet(sid) {
+  const val = document.getElementById(`prep-${sid}`).value.trim();
+  confirmedSets[sid] = { prepFor: val, noPrep: false };
+
+  // Learn new item contributions from this set
+  learnFromSet(sid, val);
+
+  const card = document.getElementById(`set-card-${sid}`);
+  card.classList.remove('needs-review');
+  card.classList.add('confirmed');
+  card.querySelector('.set-status').className = 'set-status status-confirmed';
+  card.querySelector('.set-status').textContent = '✓ Confirmed';
+
+  checkAllConfirmed();
+}
+
+function noPrepSet(sid) {
+  confirmedSets[sid] = { prepFor: '', noPrep: true };
+  const card = document.getElementById(`set-card-${sid}`);
+  card.classList.remove('needs-review');
+  card.classList.add('confirmed');
+  card.querySelector('.set-status').className = 'set-status status-confirmed';
+  card.querySelector('.set-status').textContent = '— No Prep';
+  document.getElementById(`prep-${sid}`).value = '';
+  checkAllConfirmed();
+}
+
+function confirmAllAuto() {
+  Object.entries(pdfSets).forEach(([sid]) => {
+    if (!confirmedSets[sid]) {
+      const val = document.getElementById(`prep-${sid}`)?.value?.trim() || '';
+      confirmedSets[sid] = { prepFor: val, noPrep: false };
+      const card = document.getElementById(`set-card-${sid}`);
+      if (card) {
+        card.classList.remove('needs-review'); card.classList.add('confirmed');
+        card.querySelector('.set-status').className = 'set-status status-confirmed';
+        card.querySelector('.set-status').textContent = '✓ Confirmed';
+      }
+    }
+  });
+  alertTab('sets', false);
+}
+
+function checkAllConfirmed() {
+  const total = Object.keys(pdfSets).length;
+  const done  = Object.keys(confirmedSets).length;
+  const unreviewed = Object.keys(pdfSets).filter(sid => {
+    const card = document.getElementById(`set-card-${sid}`);
+    return card && card.classList.contains('needs-review');
+  }).length;
+  alertTab('sets', unreviewed > 0);
+}
+
+// ── Learn item contributions from a confirmed set ────────────────────
+function learnFromSet(sid, prepFor) {
+  if (!pdfSets[sid]) return;
+  const items = pdfSets[sid].items;
+  const opng  = pdfSets[sid].opngType;
+
+  items.forEach(it => {
+    const u = it.desc.toUpperCase();
+    // Check if already in memory
+    const alreadyKnown = Object.keys(itemMemory).some(kw => u.includes(kw.toUpperCase()));
+    if (!alreadyKnown && it.desc.length > 3) {
+      // Add a new memory entry with the first significant word as key
+      // and mark as 'other' — user can refine in settings
+      const shortKey = it.desc.split(/\s+/).slice(0,3).join(' ').toUpperCase();
+      itemMemory[shortKey] = { contrib: null, cat: 'other' };
+    }
+  });
+  persistMemory();
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// FRACTIONS & SIZE
+// ══════════════════════════════════════════════════════════════════════
+const FRACS = [[0,""],[1/8,"1/8"],[1/4,"1/4"],[3/8,"3/8"],[1/2,"1/2"],[5/8,"5/8"],[3/4,"3/4"],[7/8,"7/8"]];
+function nf(d) { let b=FRACS[0]; FRACS.forEach(f=>{if(Math.abs(f[0]-d)<Math.abs(b[0]-d))b=f;}); return b[1]; }
+
+// Format total inches as feet-inches (e.g. 2-11 3/4) or pure inches (e.g. 35 3/4)
+function fmtDim(totalIn) {
+  if (settings.sizeMode === 'inches') {
+    // Pure inches with fraction: e.g. 35 3/4
+    const w = Math.floor(totalIn), fr = nf(totalIn - w);
+    return fr ? `${w} ${fr}` : `${w}`;
+  } else {
+    // Feet-inches: e.g. 2-11 3/4
+    const ft=Math.floor(totalIn/12), rem=totalIn-ft*12, w=Math.floor(rem), fr=nf(rem-w);
+    return `${ft}-${fr ? w+' '+fr : w}`;
+  }
+}
+
+// Format throat (always fraction, no feet)
+function throatFmt(v) {
+  const n=parseFloat(v)||0, w=Math.floor(n), fr=nf(n-w);
+  return fr ? `${w}-${fr}"` : `${n}"`;
+}
+
+function doorSz(wFt,wIn,hFt,hIn,thick,wD,hD) {
+  const t={"4":'1-3/4"',"1.75":'1-3/4"'}[String(thick)]||thick+'"';
+  return `${fmtDim(wFt*12+wIn-wD)}" X ${fmtDim(hFt*12+hIn-hD)}" X ${t}`;
+}
+function frameSz(wFt,wIn,hFt,hIn,throat,opng) {
+  const w=wFt*12+wIn, h=hFt*12+hIn, t=throatFmt(throat);
+  const wStr=fmtDim(w), hStr=fmtDim(h);
+  if (opng==='SNGL') return `${wStr}" X ${hStr}" X ${t}`;
+  if (opng==='PAIR') return `FULL HEAD ${wStr}" X ${hStr}" X ${t}`;
+  if (opng==='UNPR') {
+    // Sub-note always in feet-inches regardless of mode
+    const half=w/2, hft=Math.floor(half/12), hin=half-hft*12, hw=Math.floor(hin), hfr=nf(hin-hw);
+    const sub=hfr?`${hft}'-${hw} ${hfr}"`:hin===0?`${hft}'`:`${hft}'-${hw}"`;
+    return `FULL HEAD ${wStr}" X ${hStr}" X ${t}\n(${sub} /${sub})`;
+  }
+  return `${wStr}" X ${hStr}" X ${t}`;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// CONVERT
+// ══════════════════════════════════════════════════════════════════════
+function doConvert() {
+  const po = document.getElementById('poInput').value;
+  const wD = parseFloat(settings.wDeduct)||0, hD = parseFloat(settings.hDeduct)||0;
+
+  // Warn if any sets unconfirmed
+  const unconf = Object.keys(pdfSets).filter(sid=>!confirmedSets[sid]);
+  const warnEl = document.getElementById('convert-warn');
+  if (unconf.length) {
+    warnEl.textContent = `⚠ ${unconf.length} set(s) not yet confirmed: ${unconf.join(', ')} — PREP FOR will be blank for those openings.`;
+    warnEl.classList.remove('hidden');
+  } else { warnEl.classList.add('hidden'); }
+
+  function getPrepFor(hdwe, opng) {
+    if (confirmedSets[hdwe]) return confirmedSets[hdwe].prepFor || '';
+    // Fallback: auto-derive if set exists in pdfSets
+    if (pdfSets[hdwe]) return assemblePrepFor(pdfSets[hdwe].items, opng);
+    return '';
+  }
+
+  doorRows = fileRows
+    .filter(r=>String(r.Door||'').trim().toUpperCase()==='WD'&&!String(r.OpngNumbers||'').startsWith('*DELETED*'))
+    .map(r=>{
+      const wFt=+r.WidthFt||0,wIn=+r.WidthIn||0,hFt=+r.HeightFt||0,hIn=+r.HeightIn||0;
+      const elev=String(r.Elevation||r.FrameKB||'').trim().replace(/\s/g,'');
+      const hdwe=String(r.HdweSetID||'').trim();
+      const opng=String(r.OpngType||'SNGL').trim();
+      return {
+        'PO#':po,'OpngNumbers':r.OpngNumbers,'Qty':r.Qty,
+        'Floor':settings.elevMap[elev]||elev,'Loc1':r.Loc1,'Label':r.Label,
+        'SIZE':doorSz(wFt,wIn,hFt,hIn,r.DoorThickness||4,wD,hD),
+        'WidthFt':wFt,'WidthIn':wIn,'HeightFt':hFt,'HeightIn':hIn,'OpngType':opng,
+        'Hand':settings.handMap[String(r.Hand||'').trim()]||String(r.Hand||'').trim(),
+        'HdweSetID':hdwe,'DoorKB':r.DoorKB,
+        'DoorCore':settings.coreMap[String(r.DoorCore||'').trim()]||String(r.DoorCore||'').trim(),
+        'DoorFinish':r.DoorFinish,'DoorElev':r.DoorElev,
+        'DoorUndercut':settings.undercutMap[String(r.DoorUndercut||'').trim()]||String(r.DoorUndercut||'').trim(),
+        'PREP FOR':getPrepFor(hdwe,opng)
+      };
+    });
+
+  frameRows = fileRows
+    .filter(r=>String(r.Frame||'').trim().toUpperCase()==='HM'&&!String(r.OpngNumbers||'').startsWith('*DELETED*'))
+    .map(r=>{
+      const wFt=+r.WidthFt||0,wIn=+r.WidthIn||0,hFt=+r.HeightFt||0,hIn=+r.HeightIn||0;
+      const elev=String(r.Elevation||'').trim().replace(/\s/g,'');
+      const hdwe=String(r.HdweSetID||'').trim();
+      const throat=parseFloat(r.Throat)||0;
+      const opng=String(r.OpngType||'').trim();
+      return {
+        'PO#':po,'OpngNumbers':r.OpngNumbers,'Qty':r.Qty,
+        'Floor':settings.elevMap[elev]||elev||String(r.Floor||'').trim(),
+        'Loc1':r.Loc1,'Label':r.Label,
+        'SIZE':frameSz(wFt,wIn,hFt,hIn,throat,opng),
+        'WidthFt':wFt,'WidthIn':wIn,'HeightFt':hFt,'HeightIn':hIn,'OpngType':opng,
+        'Hand':settings.frameHandMap[String(r.Hand||'').trim()]||String(r.Hand||'').trim(),
+        'HdweSetID':hdwe,'Throat':throatFmt(throat),
+        'FrameKB':settings.frameKbMap[String(r.FrameKB||'').trim()]||String(r.FrameKB||'').trim(),
+        'AnchorType':settings.anchorMap[String(r.AnchorType||'').trim()]||String(r.AnchorType||'').trim(),
+        'PREP FOR':getPrepFor(hdwe,opng)
+      };
+    });
+
+  renderTbl('tblDoors', doorRows);
+  renderTbl('tblFrames', frameRows);
+  document.getElementById('cntDoors').textContent  = doorRows.length;
+  document.getElementById('cntFrames').textContent = frameRows.length;
+  document.getElementById('resultSection').classList.remove('hidden');
+  ['btnExpDoors','btnExpFrames','btnExpBoth'].forEach(id=>document.getElementById(id).classList.remove('hidden'));
+  switchSub('doors');
+}
+
+function renderTbl(id, rows) {
+  if (!rows.length) { document.getElementById(id).innerHTML="<tr><td style='color:#9ca3af;padding:16px'>No rows</td></tr>"; return; }
+  const cols = Object.keys(rows[0]);
+  let h = `<thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>`;
+  rows.forEach(r => {
+    h += '<tr>' + cols.map(c => {
+      const v = String(r[c]??'').replace(/\n/g,'↵ ');
+      const cls = c==='PREP FOR' ? (v ? 'prep-cell' : 'prep-missing') : '';
+      const display = c==='PREP FOR' && !v ? '(blank)' : v;
+      return `<td${cls?' class="'+cls+'"':''}>${display}</td>`;
+    }).join('') + '</tr>';
+  });
+  document.getElementById(id).innerHTML = h + '</tbody>';
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// EXPORT
+// ══════════════════════════════════════════════════════════════════════
+function doExport(type) {
+  const rows=type==='doors'?doorRows:frameRows;
+  const suf=type==='doors'?'_WD_DOORS':'_HM_FRAMES';
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),type==='doors'?'WD Doors':'HM Frames');
+  XLSX.writeFile(wb, currentFile+suf+'.xlsx');
+}
+function doExportBoth() {
+  const wb=XLSX.utils.book_new();
+  if (doorRows.length)  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(doorRows),'WD Doors');
+  if (frameRows.length) XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(frameRows),'HM Frames');
+  XLSX.writeFile(wb, currentFile+'_CONVERTED.xlsx');
+}
+
+function exportHardwareAudit() {
+  const wb = XLSX.utils.book_new();
+
+  // ── Tab 1: Sets with all items ──────────────────────────────────────
+  const setsRows = [];
+  Object.entries(pdfSets).sort(([a],[b])=>a.localeCompare(b,undefined,{numeric:true})).forEach(([sid, setData]) => {
+    const confirmed = confirmedSets[sid];
+    setData.items.forEach((it, idx) => {
+      const cls = classifyItem(it.desc);
+      setsRows.push({
+        'Set ID':          sid,
+        'Opening Type':    setData.opngType,
+        'Item #':          idx + 1,
+        'Description':     it.desc,
+        'Category':        cls.cat || 'unknown',
+        'Prep Contribution': cls.contrib !== null ? (cls.contrib || 'none') : '? UNKNOWN',
+        'From Memory':     cls.fromMemory ? 'Yes' : 'No (rule/new)',
+        'PREP FOR (set)':  confirmed ? confirmed.prepFor : '(not confirmed)',
+        'Status':          confirmed ? (confirmed.noPrep ? 'No Prep' : 'Confirmed') : 'Pending',
+      });
+    });
+    // Blank separator row between sets
+    setsRows.push({});
+  });
+  if (setsRows.length) {
+    const ws1 = XLSX.utils.json_to_sheet(setsRows);
+    // Column widths
+    ws1['!cols'] = [
+      {wch:10},{wch:13},{wch:8},{wch:55},{wch:12},{wch:22},{wch:16},{wch:36},{wch:12}
+    ];
+    XLSX.utils.book_append_sheet(wb, ws1, 'Sets & Items');
+  }
+
+  // ── Tab 2: Flat deduplicated hardware list with quantities ───────────
+  // Build a map: setId -> total openings qty from xlsx
+  // Each opening in xlsx has a Qty (number of doors/frames for that opening number)
+  // We multiply: openingQty × item qty within the set
+  // Since PDF items don't carry per-item qty easily, we use 1 per item as default
+  // but multiply by the number of openings using that set from the xlsx
+
+  // Step 1: count total openings per set from xlsx
+  const setOpeningQty = {}; // setId -> sum of Qty
+  fileRows.forEach(r => {
+    const sid = String(r.HdweSetID||'').trim();
+    if (!sid || sid === '---') return;
+    const qty = parseInt(r.Qty) || 1;
+    setOpeningQty[sid] = (setOpeningQty[sid] || 0) + qty;
+  });
+
+  const seen = new Map(); // desc.toUpperCase() -> entry
+  Object.entries(pdfSets).forEach(([sid, setData]) => {
+    const openingQty = setOpeningQty[sid] || 0;
+    setData.items.forEach(it => {
+      const key = it.desc.trim().toUpperCase();
+      // Use qty stored on item from PDF parse (e.g. 3 hinges) × openings using this set
+      const itemQtyPerOpening = it.qty || 1;
+      const totalQty = itemQtyPerOpening * openingQty;
+
+      if (!seen.has(key)) {
+        const cls = classifyItem(it.desc);
+        seen.set(key, {
+          'Description':       it.desc,
+          'Category':          cls.cat || 'unknown',
+          'Prep Contribution': cls.contrib !== null ? (cls.contrib || 'none') : '? UNKNOWN — NEEDS REVIEW',
+          'In Memory':         cls.fromMemory ? 'Yes' : 'No',
+          'Total Qty':         totalQty,
+          'Used In Sets':      sid,
+          'Set Count':         1,
+        });
+      } else {
+        const entry = seen.get(key);
+        entry['Total Qty'] += totalQty;
+        // Only add set if not already listed
+        if (!entry['Used In Sets'].split(', ').includes(sid)) {
+          entry['Used In Sets'] += ', ' + sid;
+          entry['Set Count']++;
+        }
+      }
+    });
+  });
+
+  const hwRows = Array.from(seen.values())
+    .sort((a,b) => a['Category'].localeCompare(b['Category']) || a['Description'].localeCompare(b['Description']));
+
+  if (hwRows.length) {
+    const ws2 = XLSX.utils.json_to_sheet(hwRows);
+    ws2['!cols'] = [{wch:55},{wch:12},{wch:28},{wch:10},{wch:12},{wch:40},{wch:10}];
+    XLSX.utils.book_append_sheet(wb, ws2, 'All Hardware');
+  }
+
+  // ── Tab 3: Item memory snapshot ─────────────────────────────────────
+  const memRows = Object.entries(itemMemory).sort(([a],[b])=>a.localeCompare(b)).map(([kw, mem]) => ({
+    'Keyword':           kw,
+    'Prep Contribution': mem.contrib !== null ? (mem.contrib || 'none') : '? unset',
+    'Category':          mem.cat,
+  }));
+  if (memRows.length) {
+    const ws3 = XLSX.utils.json_to_sheet(memRows);
+    ws3['!cols'] = [{wch:40},{wch:28},{wch:12}];
+    XLSX.utils.book_append_sheet(wb, ws3, 'Memory Snapshot');
+  }
+
+  XLSX.writeFile(wb, (currentFile||'hardware')+'_AUDIT.xlsx');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// SETTINGS
+// ══════════════════════════════════════════════════════════════════════
+function mkMap(id, obj, key) {
+  const el = document.getElementById(id);
+  el.innerHTML = '';
+
+  // Existing rows
+  Object.entries(obj).forEach(([k, v]) => {
+    const d = document.createElement('div');
+    d.className = 'map-row';
+    d.innerHTML = `
+      <input class="field-input" value="${escHtml(k)}" readonly>
+      <span class="arrow">→</span>
+      <input class="field-input" value="${escHtml(String(v))}" onchange="settings.${key}['${k}']=this.value">
+      <button onclick="deleteMapRow('${key}','${escHtml(k)}','${id}')"
+        style="background:none;border:none;color:#d1d5db;cursor:pointer;font-size:14px;padding:0 4px;flex-shrink:0;" title="Remove">✕</button>`;
+    el.appendChild(d);
+  });
+
+  // Add new row button
+  const addRow = document.createElement('div');
+  addRow.style = 'display:flex;gap:5px;margin-top:5px;';
+  addRow.innerHTML = `
+    <input class="field-input" placeholder="from value" id="${id}-new-key" style="flex:1;">
+    <span class="arrow" style="line-height:32px;">→</span>
+    <input class="field-input" placeholder="to value" id="${id}-new-val" style="flex:1;">
+    <button onclick="addMapRow('${key}','${id}')"
+      style="padding:5px 10px;background:#b8860b;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:11px;font-family:inherit;font-weight:700;flex-shrink:0;">+ Add</button>`;
+  el.appendChild(addRow);
+}
+
+function addMapRow(key, id) {
+  const k = document.getElementById(`${id}-new-key`)?.value.trim();
+  const v = document.getElementById(`${id}-new-val`)?.value.trim();
+  if (!k) return;
+  settings[key][k] = v;
+  persistSettings();
+  mkMap(id, settings[key], key);
+}
+
+function deleteMapRow(key, k, id) {
+  delete settings[key][k];
+  persistSettings();
+  mkMap(id, settings[key], key);
+}
+function renderMemRows() {
+  const tb=document.getElementById('memRows'); tb.innerHTML='';
+  Object.entries(itemMemory).sort(([a],[b])=>a.localeCompare(b)).forEach(([kw,mem])=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td style="color:#888;font-size:10px">${escHtml(kw)}</td>
+      <td><input class="field-input" style="font-size:10px" value="${escHtml(String(mem.contrib||''))}" onchange="itemMemory['${escHtml(kw)}'].contrib=this.value;persistMemory()"></td>
+      <td><select style="background:#fff;border:1px solid #d1d5db;color:#374151;font-family:inherit;font-size:11px;padding:5px;border-radius:3px" onchange="itemMemory['${escHtml(kw)}'].cat=this.value;persistMemory()">
+        ${['hinge','lock','closer','other','none','append'].map(c=>`<option value="${c}" ${mem.cat===c?'selected':''}>${c}</option>`).join('')}
+      </select></td>
+      <td><button onclick="deleteMemItem('${escHtml(kw)}')" style="background:none;border:none;color:#9ca3af;cursor:pointer;font-size:11px">✕</button></td>
+    `;
+    tb.appendChild(tr);
+  });
+}
+function deleteMemItem(kw) { delete itemMemory[kw]; persistMemory(); renderMemRows(); }
+function clearItemMemory() { if(confirm('Clear all item memory?')){ itemMemory={}; persistMemory(); renderMemRows(); } }
+function toggleApiKeyVisibility() {
+  const inp = document.getElementById('s-apikey');
+  const btn = document.getElementById('btn-togglekey');
+  if (inp.type === 'password') { inp.type = 'text'; btn.textContent = 'Hide'; }
+  else { inp.type = 'password'; btn.textContent = 'Show'; }
+}
+
+function renderSettings() {
+  document.getElementById('s-po').value = settings.po||'';
+  document.getElementById('s-apikey').value = settings.apiKey||'';
+  document.getElementById('s-wDed').value = settings.wDeduct;
+  document.getElementById('s-hDed').value=settings.hDeduct;
+  // Size mode radio
+  const smVal = settings.sizeMode || 'feetinches';
+  document.getElementById('sm-feetinches').checked = smVal === 'feetinches';
+  document.getElementById('sm-inches').checked     = smVal === 'inches';
+  mkMap('r-handMap',settings.handMap,'handMap');
+  mkMap('r-coreMap',settings.coreMap,'coreMap');
+  mkMap('r-undercutMap',settings.undercutMap,'undercutMap');
+  mkMap('r-elevMap',settings.elevMap,'elevMap');
+  mkMap('r-frameHandMap',settings.frameHandMap,'frameHandMap');
+  mkMap('r-frameKbMap',settings.frameKbMap,'frameKbMap');
+  mkMap('r-anchorMap',settings.anchorMap,'anchorMap');
+  renderMemRows();
+}
+function saveSettings() {
+  settings.po = document.getElementById('s-po').value;
+  settings.apiKey = document.getElementById('s-apikey').value.trim();
+  settings.wDeduct = parseFloat(document.getElementById('s-wDed').value)||0;
+  settings.hDeduct=parseFloat(document.getElementById('s-hDed').value)||0;
+  const smEl = document.querySelector('input[name="sizeMode"]:checked');
+  if (smEl) settings.sizeMode = smEl.value;
+  persistSettings();
+  document.getElementById('poInput').value=settings.po;
+  const b=document.getElementById('saveBtn');
+  b.textContent='✓ Saved'; b.classList.add('saved');
+  setTimeout(()=>{b.textContent='Save Settings';b.classList.remove('saved');},2000);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════════════════════════════════
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function showMsg(id, type, text) {
+  const el=document.getElementById(id);
+  el.className=`msg-box msg-${type}`;
+  el.textContent=text;
+  el.classList.remove('hidden');
+}
+
+// Init
+document.getElementById('poInput').value = settings.po||'';
+</script>
+</body>
+</html>
