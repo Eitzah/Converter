@@ -558,7 +558,7 @@ function parsePdf(file) {
         const apiKey = settings.apiKey || BUILT_IN_API_KEY || '';
         if (!apiKey) throw new Error('No API key set — add your Anthropic API key in Settings first.');
 
-        const response = await fetch('anthropic-proxy.eitzah.workers.dev', {
+        const response = await fetch('https://anthropic-proxy.eitzah.workers.dev', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
