@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Door Schedule Converter v3</title>
+<title>Door Schedule Converter v4</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -139,7 +139,7 @@ td.prep-missing { color: #b91c1c; font-style: italic; }
       <div class="header-label">Door Schedule</div>
       <div class="header-title">Converter</div>
     </div>
-    <span class="header-ver">v3</span>
+    <span class="header-ver">v4</span>
   </div>
   <div class="tabs">
     <button class="tab active" id="tab-btn-upload"  onclick="goTab('upload')">Upload</button>
@@ -316,8 +316,8 @@ const DEFAULT_SETTINGS = {
   undercutMap:  { "0.75":'3/4"', "1":'1"', "1.375":'1-1/8"' },
   frameHandMap: { L:"LH", R:"RH", LR:"LHR", RR:"RHR", LH:"LH", RH:"RH", LHR:"LHR", RHR:"RHR",
                   RRA:"RIGHT REVERSE ACTIVE", LRA:"LEFT REVERSE ACTIVE", BRA:"BOTH REVERSE ACTIVE" },
-  frameKbMap:   { "DW-16-WD":"16GA WELDED", "DW-16-KD":"16GA KD", "CMU-16-WD":"16GA WELDED CMU" },
-  anchorMap:    { WWS:"[ ]", PF:"TS", "P+D":"EMA" },
+  frameKbMap:   { "DW-16-WD":"16GA WELDED", "DW-16-KD":"16GA KD", "CMU-16-WD":"16GA WELDED CMU", "DW-14-WD":"14GA WELDED", "DW-18-WD":"18GA WELDED" },
+  anchorMap:    { WWS:"[ ]", PF:"TS", "P+D":"EMA", "P&D":"EMA", MP:"MP" },
   elevMap:      { "1F":"1st","2F":"2nd","3F":"3rd","4F":"4th","5F":"5th","6F":"6th","B":"Bsmt","G":"Grnd" }
 };
 
@@ -365,18 +365,18 @@ let currentFile = "converted";
 // ══════════════════════════════════════════════════════════════════════
 function loadSettings() {
   try {
-    const s = localStorage.getItem("dcv3_settings");
+    const s = localStorage.getItem("dcv4_settings");
     return s ? deepMerge(JSON.parse(JSON.stringify(DEFAULT_SETTINGS)), JSON.parse(s)) : JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
   } catch { return JSON.parse(JSON.stringify(DEFAULT_SETTINGS)); }
 }
 function loadItemMemory() {
   try {
-    const s = localStorage.getItem("dcv3_items");
+    const s = localStorage.getItem("dcv4_items");
     return s ? { ...DEFAULT_ITEM_MEMORY, ...JSON.parse(s) } : { ...DEFAULT_ITEM_MEMORY };
   } catch { return { ...DEFAULT_ITEM_MEMORY }; }
 }
-function persistSettings() { try { localStorage.setItem("dcv3_settings", JSON.stringify(settings)); } catch {} }
-function persistMemory()   { try { localStorage.setItem("dcv3_items",    JSON.stringify(itemMemory)); } catch {} }
+function persistSettings() { try { localStorage.setItem("dcv4_settings", JSON.stringify(settings)); } catch {} }
+function persistMemory()   { try { localStorage.setItem("dcv4_items",    JSON.stringify(itemMemory)); } catch {} }
 function deepMerge(t, s) {
   for (const k in s) {
     if (s[k] && typeof s[k]==='object' && !Array.isArray(s[k])) { t[k]=t[k]||{}; deepMerge(t[k],s[k]); }
@@ -1448,58 +1448,88 @@ function doConvert() {
     return '';
   }
 
-  // Discover all door types in this job (exclude deleted, exclude blank)
-  const typeSet = new Set();
-  fileRows.forEach(r => {
-    const t = String(r.Door||'').trim().toUpperCase();
-    if (t && t !== '---' && !String(r.OpngNumbers||'').startsWith('*DELETED*')) typeSet.add(t);
-  });
-  doorTypes = [...typeSet].sort();
-
   typeRows    = {};
   typeGrouped = {};
 
+  // Discover all types from BOTH Door and Frame columns
+  const typeSet = new Set();
+  fileRows.forEach(r => {
+    if (String(r.OpngNumbers||'').startsWith('*DELETED*')) return;
+    const door  = String(r.Door||'').trim().toUpperCase();
+    const frame = String(r.Frame||'').trim().toUpperCase();
+    if (door  && door  !== '---') typeSet.add(door);
+    if (frame && frame !== '---') typeSet.add(frame);
+  });
+  doorTypes = [...typeSet].sort();
+
+  // Initialize empty arrays for each type
+  doorTypes.forEach(t => { typeRows[t] = []; });
+
+  // Process each row — output to Door type tab AND Frame type tab if different
+  fileRows
+    .filter(r => !String(r.OpngNumbers||'').startsWith('*DELETED*'))
+    .forEach(r => {
+      const doorType  = String(r.Door||'').trim().toUpperCase();
+      const frameType = String(r.Frame||'').trim().toUpperCase();
+      const wFt=+r.WidthFt||0, wIn=+r.WidthIn||0, hFt=+r.HeightFt||0, hIn=+r.HeightIn||0;
+      const hdwe = String(r.HdweSetID||'').trim();
+      const opng = String(r.OpngType||'SNGL').trim();
+
+      // Door output — always use door columns regardless of frame type
+      if (doorType && doorType !== '---' && !isFrameType(doorType)) {
+        if (!typeRows[doorType]) typeRows[doorType] = [];
+        typeRows[doorType].push({
+          'PO#':po,'OpngNumbers':r.OpngNumbers,'Qty':r.Qty,
+          'Floor':resolveFloor(r),'Loc1':r.Loc1,'Label':r.Label,
+          'SIZE':doorSz(wFt,wIn,hFt,hIn,r.DoorThickness||4,wD,hD),
+          'WidthFt':wFt,'WidthIn':wIn,'HeightFt':hFt,'HeightIn':hIn,'OpngType':opng,
+          'Hand':settings.handMap[String(r.Hand||'').trim()]||String(r.Hand||'').trim(),
+          'HdweSetID':hdwe,'DoorKB':r.DoorKB,
+          'DoorCore':settings.coreMap[String(r.DoorCore||'').trim()]||String(r.DoorCore||'').trim(),
+          'DoorFinish':r.DoorFinish,'DoorElev':r.DoorElev,
+          'DoorUndercut':settings.undercutMap[String(r.DoorUndercut||'').trim()]||String(r.DoorUndercut||'').trim(),
+          'PREP FOR':getPrepFor(hdwe,opng)
+        });
+      }
+
+      // Frame output — always use frame columns, triggered by Frame column value
+      if (frameType && frameType !== '---' && isFrameType(frameType)) {
+        const throat = parseFloat(r.Throat)||0;
+        if (!typeRows[frameType]) typeRows[frameType] = [];
+        typeRows[frameType].push({
+          'PO#':po,'OpngNumbers':r.OpngNumbers,'Qty':r.Qty,
+          'Floor':resolveFloor(r),'Loc1':r.Loc1,'Label':r.Label,
+          'SIZE':frameSz(wFt,wIn,hFt,hIn,throat,opng),
+          'WidthFt':wFt,'WidthIn':wIn,'HeightFt':hFt,'HeightIn':hIn,'OpngType':opng,
+          'Hand':settings.frameHandMap[String(r.Hand||'').trim()]||String(r.Hand||'').trim(),
+          'HdweSetID':hdwe,'Throat':throatFmt(throat),
+          'FrameKB':settings.frameKbMap[String(r.FrameKB||'').trim()]||String(r.FrameKB||'').trim(),
+          'AnchorType':settings.anchorMap[String(r.AnchorType||'').trim()]||String(r.AnchorType||'').trim(),
+          'PREP FOR':getPrepFor(hdwe,opng)
+        });
+      }
+
+      // Edge case: Door=HM (pure HM door with no separate Frame column)
+      if (doorType && isFrameType(doorType) && (frameType === '---' || !frameType)) {
+        const throat = parseFloat(r.Throat)||0;
+        if (!typeRows[doorType]) typeRows[doorType] = [];
+        typeRows[doorType].push({
+          'PO#':po,'OpngNumbers':r.OpngNumbers,'Qty':r.Qty,
+          'Floor':resolveFloor(r),'Loc1':r.Loc1,'Label':r.Label,
+          'SIZE':frameSz(wFt,wIn,hFt,hIn,throat,opng),
+          'WidthFt':wFt,'WidthIn':wIn,'HeightFt':hFt,'HeightIn':hIn,'OpngType':opng,
+          'Hand':settings.frameHandMap[String(r.Hand||'').trim()]||String(r.Hand||'').trim(),
+          'HdweSetID':hdwe,'Throat':throatFmt(throat),
+          'FrameKB':settings.frameKbMap[String(r.FrameKB||'').trim()]||String(r.FrameKB||'').trim(),
+          'AnchorType':settings.anchorMap[String(r.AnchorType||'').trim()]||String(r.AnchorType||'').trim(),
+          'PREP FOR':getPrepFor(hdwe,opng)
+        });
+      }
+    });
+
+  // Build grouped for non-frame types
   doorTypes.forEach(type => {
-    const rows = fileRows
-      .filter(r => String(r.Door||'').trim().toUpperCase() === type
-                && !String(r.OpngNumbers||'').startsWith('*DELETED*'))
-      .map(r => {
-        const wFt=+r.WidthFt||0, wIn=+r.WidthIn||0, hFt=+r.HeightFt||0, hIn=+r.HeightIn||0;
-        const hdwe = String(r.HdweSetID||'').trim();
-        const opng = String(r.OpngType||'SNGL').trim();
-
-        if (isFrameType(type)) {
-          const throat = parseFloat(r.Throat)||0;
-          return {
-            'PO#':po,'OpngNumbers':r.OpngNumbers,'Qty':r.Qty,
-            'Floor':resolveFloor(r),'Loc1':r.Loc1,'Label':r.Label,
-            'SIZE':frameSz(wFt,wIn,hFt,hIn,throat,opng),
-            'WidthFt':wFt,'WidthIn':wIn,'HeightFt':hFt,'HeightIn':hIn,'OpngType':opng,
-            'Hand':settings.frameHandMap[String(r.Hand||'').trim()]||String(r.Hand||'').trim(),
-            'HdweSetID':hdwe,'Throat':throatFmt(throat),
-            'FrameKB':settings.frameKbMap[String(r.FrameKB||'').trim()]||String(r.FrameKB||'').trim(),
-            'AnchorType':settings.anchorMap[String(r.AnchorType||'').trim()]||String(r.AnchorType||'').trim(),
-            'PREP FOR':getPrepFor(hdwe,opng)
-          };
-        } else {
-          return {
-            'PO#':po,'OpngNumbers':r.OpngNumbers,'Qty':r.Qty,
-            'Floor':resolveFloor(r),'Loc1':r.Loc1,'Label':r.Label,
-            'SIZE':doorSz(wFt,wIn,hFt,hIn,r.DoorThickness||4,wD,hD),
-            'WidthFt':wFt,'WidthIn':wIn,'HeightFt':hFt,'HeightIn':hIn,'OpngType':opng,
-            'Hand':settings.handMap[String(r.Hand||'').trim()]||String(r.Hand||'').trim(),
-            'HdweSetID':hdwe,'DoorKB':r.DoorKB,
-            'DoorCore':settings.coreMap[String(r.DoorCore||'').trim()]||String(r.DoorCore||'').trim(),
-            'DoorFinish':r.DoorFinish,'DoorElev':r.DoorElev,
-            'DoorUndercut':settings.undercutMap[String(r.DoorUndercut||'').trim()]||String(r.DoorUndercut||'').trim(),
-            'PREP FOR':getPrepFor(hdwe,opng)
-          };
-        }
-      });
-
-    typeRows[type] = rows;
-    // Only group non-frame types
-    if (!isFrameType(type)) typeGrouped[type] = groupRows(rows);
+    if (!isFrameType(type)) typeGrouped[type] = groupRows(typeRows[type]||[]);
   });
 
   // Build dynamic tabs and panels
@@ -1753,13 +1783,15 @@ function mkMap(id, obj, key) {
   if (!el) return; // silently skip if element not in DOM
   el.innerHTML = '';
   Object.entries(obj).forEach(([k, v]) => {
+    const displayKey = escHtml(k);   // for HTML attribute values only
+    const jsKey = k.replace(/\\/g,'\\\\').replace(/'/g,"\\'"); // safe for JS string
     const d = document.createElement('div');
     d.className = 'map-row';
     d.innerHTML = `
-      <input class="field-input" value="${escHtml(k)}" readonly>
+      <input class="field-input" value="${displayKey}" readonly>
       <span class="arrow">→</span>
-      <input class="field-input" value="${escHtml(String(v))}" onchange="settings.${key}['${k}']=this.value">
-      <button onclick="deleteMapRow('${key}','${escHtml(k)}','${id}')"
+      <input class="field-input" value="${escHtml(String(v))}" onchange="updateMapRow('${key}','${jsKey}',this.value)">
+      <button onclick="deleteMapRow('${key}','${jsKey}','${id}')"
         style="background:none;border:none;color:#d1d5db;cursor:pointer;font-size:14px;padding:0 4px;flex-shrink:0;" title="Remove">✕</button>`;
     el.appendChild(d);
   });
@@ -1774,6 +1806,12 @@ function mkMap(id, obj, key) {
     <button onclick="addMapRow('${key}','${id}')"
       style="padding:5px 10px;background:#b8860b;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:11px;font-family:inherit;font-weight:700;flex-shrink:0;">+ Add</button>`;
   el.appendChild(addRow);
+}
+
+function updateMapRow(key, k, val) {
+  if (!settings[key]) settings[key] = {};
+  settings[key][k] = val;
+  persistSettings();
 }
 
 function addMapRow(key, id) {
@@ -1863,14 +1901,34 @@ function saveSettings() {
   settings.po = document.getElementById('s-po').value;
   settings.apiKey = document.getElementById('s-apikey').value.trim();
   settings.wDeduct = parseFloat(document.getElementById('s-wDed').value)||0;
-  settings.hDeduct=parseFloat(document.getElementById('s-hDed').value)||0;
+  settings.hDeduct = parseFloat(document.getElementById('s-hDed').value)||0;
   const smEl = document.querySelector('input[name="sizeMode"]:checked');
   if (smEl) settings.sizeMode = smEl.value;
+
+  // Sweep all map value inputs from DOM — catches any changes not fired via onchange
+  const mapIds = [
+    ['r-handMap','handMap'],['r-coreMap','coreMap'],['r-undercutMap','undercutMap'],
+    ['r-frameHandMap','frameHandMap'],['r-frameKbMap','frameKbMap'],['r-anchorMap','anchorMap']
+  ];
+  mapIds.forEach(([id, key]) => {
+    const el = document.getElementById(id);
+    if (!el || !settings[key]) return;
+    const rows = el.querySelectorAll('.map-row');
+    rows.forEach(row => {
+      const inputs = row.querySelectorAll('input.field-input');
+      if (inputs.length >= 2) {
+        const k = inputs[0].value.trim();
+        const v = inputs[1].value.trim();
+        if (k) settings[key][k] = v;
+      }
+    });
+  });
+
   persistSettings();
-  document.getElementById('poInput').value=settings.po;
-  const b=document.getElementById('saveBtn');
-  b.textContent='✓ Saved'; b.classList.add('saved');
-  setTimeout(()=>{b.textContent='Save Settings';b.classList.remove('saved');},2000);
+  document.getElementById('poInput').value = settings.po;
+  const b = document.getElementById('saveBtn');
+  b.textContent = '✓ Saved'; b.classList.add('saved');
+  setTimeout(()=>{ b.textContent='Save Settings'; b.classList.remove('saved'); }, 2000);
 }
 
 // ══════════════════════════════════════════════════════════════════════
