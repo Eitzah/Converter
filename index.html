@@ -15,10 +15,11 @@ body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f2f5; color: #
 .header-title { font-size: 20px; font-weight: 700; letter-spacing: 0.5px; color: #ffffff; }
 .header-ver { font-size: 9px; letter-spacing: 2px; background: rgba(184,134,11,0.2); color: #d4a017; border: 1px solid rgba(184,134,11,0.4); padding: 2px 7px; }
 .tabs { display: flex; gap: 4px; }
-.tab { padding: 6px 16px; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; border: 1px solid #3a3f52; cursor: pointer; font-family: inherit; transition: all 0.15s; background: transparent; color: #8890aa; border-radius: 3px; }
-.tab.active { border-color: #b8860b; color: #d4a017; background: rgba(184,134,11,0.1); }
-.tab.has-alert { border-color: #d4730a; color: #e67e22; background: rgba(230,126,34,0.1); }
-.tab:disabled { opacity: 0.3; cursor: not-allowed; }
+.tab { padding: 8px 18px; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; border: 1px solid #5a6080; cursor: pointer; font-family: inherit; transition: all 0.15s; background: rgba(255,255,255,0.06); color: #c8cdd8; border-radius: 4px; font-weight: 600; }
+.tab:hover:not(:disabled) { background: rgba(255,255,255,0.12); color: #ffffff; border-color: #8890aa; }
+.tab.active { border-color: #b8860b; color: #f5c842; background: rgba(184,134,11,0.18); }
+.tab.has-alert { border-color: #d4730a; color: #e67e22; background: rgba(230,126,34,0.15); }
+.tab:disabled { opacity: 0.35; cursor: not-allowed; background: transparent; color: #4a5068; border-color: #2e3348; }
 
 /* ── Layout ── */
 .page { padding: 24px 28px; max-width: 1300px; margin: 0 auto; display: none; }
@@ -206,18 +207,10 @@ td.prep-missing { color: #b91c1c; font-style: italic; }
     <span class="section-lbl">PO #</span>
     <input class="po-input" id="poInput" placeholder="e.g. 23804">
     <button class="btn btn-gold" onclick="doConvert()">▶ Convert</button>
-    <button class="btn btn-outline hidden" id="btnExpDoors"  onclick="doExport('doors')">⬇ Doors .xlsx</button>
-    <button class="btn btn-outline hidden" id="btnExpFrames" onclick="doExport('frames')">⬇ Frames .xlsx</button>
-    <button class="btn btn-outline hidden" id="btnExpBoth"   onclick="doExportBoth()">⬇ Combined .xlsx</button>
   </div>
   <div id="convert-warn" class="msg-box msg-warn hidden"></div>
   <div class="hidden" id="resultSection">
-    <div class="subtabs">
-      <button class="subtab active" id="st-doors"  onclick="switchSub('doors')">WD Doors  <span id="cntDoors"  class="header-ver" style="margin-left:4px"></span></button>
-      <button class="subtab"        id="st-frames" onclick="switchSub('frames')">HM Frames <span id="cntFrames" class="header-ver" style="margin-left:4px"></span></button>
-    </div>
-    <div id="panel-doors" ><div class="table-wrap"><table id="tblDoors"></table></div></div>
-    <div id="panel-frames" class="hidden"><div class="table-wrap"><table id="tblFrames"></table></div></div>
+    <div class="subtabs"></div>
   </div>
 </div>
 
@@ -244,7 +237,7 @@ td.prep-missing { color: #b91c1c; font-style: italic; }
   </div>
   <div class="s-section">
     <div class="s-title">Size Format</div>
-    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:16px;">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#374151;font-weight:500;">
         <input type="radio" name="sizeMode" id="sm-feetinches" value="feetinches" onchange="settings.sizeMode=this.value">
         <span><strong>Feet &amp; Inches</strong> — e.g. <code style="background:#f3f4f6;padding:1px 5px;border-radius:2px;font-size:11px">2-11 3/4" X 6-11 1/8" X 1-3/4"</code></span>
@@ -254,8 +247,7 @@ td.prep-missing { color: #b91c1c; font-style: italic; }
         <span><strong>Inches Only</strong> — e.g. <code style="background:#f3f4f6;padding:1px 5px;border-radius:2px;font-size:11px">35 3/4" X 83 1/8" X 1-3/4"</code></span>
       </label>
     </div>
-    <div class="field-hint" style="margin-top:8px">Throat is always expressed as inches regardless of this setting.</div>
-  </div>
+    <div class="field-hint" style="margin-bottom:14px;">Throat is always expressed as inches regardless of this setting.</div>
     <div class="two-col">
       <div><label class="field-label">Width Deduction (in)</label><input class="field-input" id="s-wDed" type="number" step="0.0625"><div class="field-hint">Default 0.25 = 1/8" each side</div></div>
       <div><label class="field-label">Height Deduction (in)</label><input class="field-input" id="s-hDed" type="number" step="0.0625"><div class="field-hint">Default 0.875 = 7/8"</div></div>
@@ -263,15 +255,25 @@ td.prep-missing { color: #b91c1c; font-style: italic; }
   </div>
   <div class="s-cols">
     <div>
-      <div class="s-section"><div class="s-title">Hand (Doors)</div><div id="r-handMap"></div></div>
+      <div class="s-section"><div class="s-title">Hand</div><div id="r-handMap"></div></div>
       <div class="s-section"><div class="s-title">Door Core</div><div id="r-coreMap"></div></div>
       <div class="s-section"><div class="s-title">Door Undercut</div><div id="r-undercutMap"></div></div>
-      <div class="s-section"><div class="s-title">Elevation → Floor</div><div id="r-elevMap"></div></div>
     </div>
     <div>
       <div class="s-section"><div class="s-title">Hand (Frames)</div><div id="r-frameHandMap"></div></div>
       <div class="s-section"><div class="s-title">Frame KB</div><div id="r-frameKbMap"></div></div>
       <div class="s-section"><div class="s-title">Anchor Type</div><div id="r-anchorMap"></div></div>
+      <div class="s-section">
+        <div class="s-title">Frame Type Codes
+          <span style="font-size:9px;color:#9ca3af;margin-left:8px;font-weight:normal;">— Door column values treated as frames</span>
+        </div>
+        <div style="font-size:11px;color:#6b7280;margin-bottom:8px;">These get frame columns (Throat, FrameKB, AnchorType) instead of door columns.</div>
+        <div id="frameTypesList" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
+        <div style="display:flex;gap:6px;">
+          <input class="field-input" id="s-newFrameType" placeholder="e.g. HMF" style="width:100px;text-transform:uppercase;">
+          <button onclick="addFrameType()" style="padding:6px 12px;background:#b8860b;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:11px;font-family:inherit;font-weight:700;">+ Add</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -308,12 +310,13 @@ const DEFAULT_SETTINGS = {
   po: "", wDeduct: 0.25, hDeduct: 0.875,
   sizeMode: 'feetinches',
   apiKey: BUILT_IN_API_KEY,
+  frameTypes: ['HM','HMF','HM-F','FRAME'],
   handMap:      { L:"LH", R:"RH", LR:"LHR", RR:"RHR", LH:"LH", RH:"RH", LHR:"LHR", RHR:"RHR" },
   coreMap:      { PC:"PC", MC:"MC", SCL:"SCL", Polystyrene:"PS", Honeycomb:"HC" },
   undercutMap:  { "0.75":'3/4"', "1":'1"', "1.375":'1-1/8"' },
   frameHandMap: { L:"LH", R:"RH", LR:"LHR", RR:"RHR", LH:"LH", RH:"RH", LHR:"LHR", RHR:"RHR",
                   RRA:"RIGHT REVERSE ACTIVE", LRA:"LEFT REVERSE ACTIVE", BRA:"BOTH REVERSE ACTIVE" },
-  frameKbMap:   { "DW-16-WD":"16GA WELDED", "DW-16-KD":"16GA KD" },
+  frameKbMap:   { "DW-16-WD":"16GA WELDED", "DW-16-KD":"16GA KD", "CMU-16-WD":"16GA WELDED CMU" },
   anchorMap:    { WWS:"[ ]", PF:"TS", "P+D":"EMA" },
   elevMap:      { "1F":"1st","2F":"2nd","3F":"3rd","4F":"4th","5F":"5th","6F":"6th","B":"Bsmt","G":"Grnd" }
 };
@@ -354,7 +357,7 @@ let xlsxFile = null, pdfFile = null;
 let fileRows = [];       // raw xlsx rows
 let pdfSets  = {};       // { setId: { items: [{desc,qty,act,inact}], opngType } }
 let confirmedSets = {};  // { setId: { prepFor, noPrep:bool } }
-let doorRows = [], frameRows = [];
+let doorRows = [], frameRows = [], groupedRows = [];
 let currentFile = "converted";
 
 // ══════════════════════════════════════════════════════════════════════
@@ -405,6 +408,10 @@ function resetJob() {
   confirmedSets = {};
   doorRows = [];
   frameRows = [];
+  groupedRows = [];
+  typeRows = {};
+  typeGrouped = {};
+  doorTypes = [];
   currentFile = 'converted';
 
   // Reset dropzones
@@ -449,7 +456,7 @@ function resetJob() {
   goTab('upload');
 }
 function switchSub(t) {
-  ['doors','frames'].forEach(s => {
+  ['doors','frames','grouped'].forEach(s => {
     document.getElementById('st-'+s).classList.toggle('active', s===t);
     document.getElementById('panel-'+s).classList.toggle('hidden', s!==t);
   });
@@ -1355,9 +1362,74 @@ function frameSz(wFt,wIn,hFt,hIn,throat,opng) {
   return `${wStr}" X ${hStr}" X ${t}`;
 }
 
+// ── Resolve floor value — Floor column only, Elevation is a drawing reference ──
+function resolveFloor(r) {
+  const direct = String(r.Floor || '').trim();
+  if (direct && direct !== '---') return direct;
+  return '';
+}
+
+// ── Group identical door lines ──────────────────────────────────────
+// Same = same SIZE + Hand + DoorCore + HdweSetID + OpngType + PREP FOR
+function groupRows(rows) {
+  const groups = new Map();
+  rows.forEach(r => {
+    const key = [r.SIZE, r.Hand, r.DoorCore, r.HdweSetID, r.OpngType, r['PREP FOR']].join('|');
+    if (!groups.has(key)) {
+      groups.set(key, {
+        'PO#': r['PO#'], 'Qty': 0,
+        'SIZE': r.SIZE, 'Hand': r.Hand,
+        'DoorCore': r.DoorCore, 'DoorUndercut': r.DoorUndercut || '',
+        'HdweSetID': r.HdweSetID, 'OpngType': r.OpngType,
+        'DoorKB': r.DoorKB || '', 'PREP FOR': r['PREP FOR'],
+        _marks: [], _locs: new Set(), _floors: new Set(),
+      });
+    }
+    const g = groups.get(key);
+    g.Qty += parseInt(r.Qty) || 1;
+    const mark = String(r.OpngNumbers || '').trim();
+    if (mark) g._marks.push(mark);
+    const loc = String(r.Loc1 || '').trim();
+    if (loc) g._locs.add(loc);
+    const fl = String(r.Floor || '').trim();
+    if (fl) g._floors.add(fl);
+  });
+
+  return Array.from(groups.values())
+    .map(g => ({
+      'PO#':          g['PO#'],
+      'Qty':          g.Qty,
+      'SIZE':         g.SIZE,
+      'Hand':         g.Hand,
+      'DoorCore':     g.DoorCore,
+      'DoorUndercut': g.DoorUndercut,
+      'HdweSetID':    g.HdweSetID,
+      'OpngType':     g.OpngType,
+      'DoorKB':       g.DoorKB,
+      'PREP FOR':     g['PREP FOR'],
+      'Marks':        g._marks.join(', '),
+      'Locations':    [...g._locs].join(', '),
+      'Floors':       [...g._floors].join(', '),
+    }))
+    .sort((a, b) => a.SIZE.localeCompare(b.SIZE) || a.Hand.localeCompare(b.Hand));
+}
+
 // ══════════════════════════════════════════════════════════════════════
-// CONVERT
+// CONVERT — dynamic per Door type
 // ══════════════════════════════════════════════════════════════════════
+
+// Job output state — keyed by door type (e.g. 'WD', 'SD', 'HM')
+let typeRows    = {};   // { 'WD': [...], 'HM': [...], 'SD': [...] }
+let typeGrouped = {};   // { 'WD': [...], 'SD': [...] } — only non-frame types
+let doorTypes   = [];   // ordered list of discovered types
+
+// Frame types — get frame-specific columns; everything else gets door columns
+const FRAME_TYPES = new Set(['HM','HMF','HM-F','FRAME']);
+
+function isFrameType(t) {
+  return (settings.frameTypes || []).map(x=>x.toUpperCase()).includes(t.toUpperCase());
+}
+
 function doConvert() {
   const po = document.getElementById('poInput').value;
   const wD = parseFloat(settings.wDeduct)||0, hD = parseFloat(settings.hDeduct)||0;
@@ -1372,65 +1444,189 @@ function doConvert() {
 
   function getPrepFor(hdwe, opng) {
     if (confirmedSets[hdwe]) return confirmedSets[hdwe].prepFor || '';
-    // Fallback: auto-derive if set exists in pdfSets
     if (pdfSets[hdwe]) return assemblePrepFor(pdfSets[hdwe].items, opng);
     return '';
   }
 
-  doorRows = fileRows
-    .filter(r=>String(r.Door||'').trim().toUpperCase()==='WD'&&!String(r.OpngNumbers||'').startsWith('*DELETED*'))
-    .map(r=>{
-      const wFt=+r.WidthFt||0,wIn=+r.WidthIn||0,hFt=+r.HeightFt||0,hIn=+r.HeightIn||0;
-      const elev=String(r.Elevation||r.FrameKB||'').trim().replace(/\s/g,'');
-      const hdwe=String(r.HdweSetID||'').trim();
-      const opng=String(r.OpngType||'SNGL').trim();
-      return {
-        'PO#':po,'OpngNumbers':r.OpngNumbers,'Qty':r.Qty,
-        'Floor':settings.elevMap[elev]||elev,'Loc1':r.Loc1,'Label':r.Label,
-        'SIZE':doorSz(wFt,wIn,hFt,hIn,r.DoorThickness||4,wD,hD),
-        'WidthFt':wFt,'WidthIn':wIn,'HeightFt':hFt,'HeightIn':hIn,'OpngType':opng,
-        'Hand':settings.handMap[String(r.Hand||'').trim()]||String(r.Hand||'').trim(),
-        'HdweSetID':hdwe,'DoorKB':r.DoorKB,
-        'DoorCore':settings.coreMap[String(r.DoorCore||'').trim()]||String(r.DoorCore||'').trim(),
-        'DoorFinish':r.DoorFinish,'DoorElev':r.DoorElev,
-        'DoorUndercut':settings.undercutMap[String(r.DoorUndercut||'').trim()]||String(r.DoorUndercut||'').trim(),
-        'PREP FOR':getPrepFor(hdwe,opng)
-      };
-    });
+  // Discover all door types in this job (exclude deleted, exclude blank)
+  const typeSet = new Set();
+  fileRows.forEach(r => {
+    const t = String(r.Door||'').trim().toUpperCase();
+    if (t && t !== '---' && !String(r.OpngNumbers||'').startsWith('*DELETED*')) typeSet.add(t);
+  });
+  doorTypes = [...typeSet].sort();
 
-  frameRows = fileRows
-    .filter(r=>String(r.Frame||'').trim().toUpperCase()==='HM'&&!String(r.OpngNumbers||'').startsWith('*DELETED*'))
-    .map(r=>{
-      const wFt=+r.WidthFt||0,wIn=+r.WidthIn||0,hFt=+r.HeightFt||0,hIn=+r.HeightIn||0;
-      const elev=String(r.Elevation||'').trim().replace(/\s/g,'');
-      const hdwe=String(r.HdweSetID||'').trim();
-      const throat=parseFloat(r.Throat)||0;
-      const opng=String(r.OpngType||'').trim();
-      return {
-        'PO#':po,'OpngNumbers':r.OpngNumbers,'Qty':r.Qty,
-        'Floor':settings.elevMap[elev]||elev||String(r.Floor||'').trim(),
-        'Loc1':r.Loc1,'Label':r.Label,
-        'SIZE':frameSz(wFt,wIn,hFt,hIn,throat,opng),
-        'WidthFt':wFt,'WidthIn':wIn,'HeightFt':hFt,'HeightIn':hIn,'OpngType':opng,
-        'Hand':settings.frameHandMap[String(r.Hand||'').trim()]||String(r.Hand||'').trim(),
-        'HdweSetID':hdwe,'Throat':throatFmt(throat),
-        'FrameKB':settings.frameKbMap[String(r.FrameKB||'').trim()]||String(r.FrameKB||'').trim(),
-        'AnchorType':settings.anchorMap[String(r.AnchorType||'').trim()]||String(r.AnchorType||'').trim(),
-        'PREP FOR':getPrepFor(hdwe,opng)
-      };
-    });
+  typeRows    = {};
+  typeGrouped = {};
 
-  renderTbl('tblDoors', doorRows);
-  renderTbl('tblFrames', frameRows);
-  document.getElementById('cntDoors').textContent  = doorRows.length;
-  document.getElementById('cntFrames').textContent = frameRows.length;
+  doorTypes.forEach(type => {
+    const rows = fileRows
+      .filter(r => String(r.Door||'').trim().toUpperCase() === type
+                && !String(r.OpngNumbers||'').startsWith('*DELETED*'))
+      .map(r => {
+        const wFt=+r.WidthFt||0, wIn=+r.WidthIn||0, hFt=+r.HeightFt||0, hIn=+r.HeightIn||0;
+        const hdwe = String(r.HdweSetID||'').trim();
+        const opng = String(r.OpngType||'SNGL').trim();
+
+        if (isFrameType(type)) {
+          const throat = parseFloat(r.Throat)||0;
+          return {
+            'PO#':po,'OpngNumbers':r.OpngNumbers,'Qty':r.Qty,
+            'Floor':resolveFloor(r),'Loc1':r.Loc1,'Label':r.Label,
+            'SIZE':frameSz(wFt,wIn,hFt,hIn,throat,opng),
+            'WidthFt':wFt,'WidthIn':wIn,'HeightFt':hFt,'HeightIn':hIn,'OpngType':opng,
+            'Hand':settings.frameHandMap[String(r.Hand||'').trim()]||String(r.Hand||'').trim(),
+            'HdweSetID':hdwe,'Throat':throatFmt(throat),
+            'FrameKB':settings.frameKbMap[String(r.FrameKB||'').trim()]||String(r.FrameKB||'').trim(),
+            'AnchorType':settings.anchorMap[String(r.AnchorType||'').trim()]||String(r.AnchorType||'').trim(),
+            'PREP FOR':getPrepFor(hdwe,opng)
+          };
+        } else {
+          return {
+            'PO#':po,'OpngNumbers':r.OpngNumbers,'Qty':r.Qty,
+            'Floor':resolveFloor(r),'Loc1':r.Loc1,'Label':r.Label,
+            'SIZE':doorSz(wFt,wIn,hFt,hIn,r.DoorThickness||4,wD,hD),
+            'WidthFt':wFt,'WidthIn':wIn,'HeightFt':hFt,'HeightIn':hIn,'OpngType':opng,
+            'Hand':settings.handMap[String(r.Hand||'').trim()]||String(r.Hand||'').trim(),
+            'HdweSetID':hdwe,'DoorKB':r.DoorKB,
+            'DoorCore':settings.coreMap[String(r.DoorCore||'').trim()]||String(r.DoorCore||'').trim(),
+            'DoorFinish':r.DoorFinish,'DoorElev':r.DoorElev,
+            'DoorUndercut':settings.undercutMap[String(r.DoorUndercut||'').trim()]||String(r.DoorUndercut||'').trim(),
+            'PREP FOR':getPrepFor(hdwe,opng)
+          };
+        }
+      });
+
+    typeRows[type] = rows;
+    // Only group non-frame types
+    if (!isFrameType(type)) typeGrouped[type] = groupRows(rows);
+  });
+
+  // Build dynamic tabs and panels
+  buildResultTabs();
   document.getElementById('resultSection').classList.remove('hidden');
-  ['btnExpDoors','btnExpFrames','btnExpBoth'].forEach(id=>document.getElementById(id).classList.remove('hidden'));
-  switchSub('doors');
+  if (doorTypes.length) switchSub(doorTypes[0]);
+}
+
+function buildResultTabs() {
+  const subtabsEl  = document.querySelector('#resultSection .subtabs');
+  const sectionsEl = document.getElementById('resultSection');
+
+  // Remove old dynamic panels (keep subtabs container)
+  sectionsEl.querySelectorAll('.dynamic-panel').forEach(el => el.remove());
+  subtabsEl.innerHTML = '';
+
+  // Remove old export buttons and re-add
+  const actionBar = document.querySelector('#page-convert .action-bar');
+  actionBar.querySelectorAll('.dynamic-exp-btn').forEach(el => el.remove());
+
+  doorTypes.forEach((type, i) => {
+    const rows    = typeRows[type]    || [];
+    const grouped = typeGrouped[type] || [];
+    const isFrame = isFrameType(type);
+    const label   = type;
+    const groupLabel = `${type} Grouped`;
+
+    // ── Raw tab ──────────────────────────────────────────────────────
+    const rawTab = document.createElement('button');
+    rawTab.className = 'subtab' + (i===0 ? ' active' : '');
+    rawTab.id = `st-${type}`;
+    rawTab.onclick = () => switchSub(type);
+    rawTab.innerHTML = `${label} <span class="header-ver" style="margin-left:4px">${rows.length}</span>`;
+    subtabsEl.appendChild(rawTab);
+
+    const rawPanel = document.createElement('div');
+    rawPanel.className = 'dynamic-panel' + (i===0 ? '' : ' hidden');
+    rawPanel.id = `panel-${type}`;
+    const rawTbl = document.createElement('table');
+    rawTbl.id = `tbl-${type}`;
+    const rawWrap = document.createElement('div');
+    rawWrap.className = 'table-wrap';
+    rawWrap.appendChild(rawTbl);
+    rawPanel.appendChild(rawWrap);
+    sectionsEl.appendChild(rawPanel);
+    renderTbl(`tbl-${type}`, rows);
+
+    // ── Grouped tab (non-frames only) ─────────────────────────────────
+    if (!isFrame && grouped.length) {
+      const grpTab = document.createElement('button');
+      grpTab.className = 'subtab';
+      grpTab.id = `st-${type}-grouped`;
+      grpTab.onclick = () => switchSub(`${type}-grouped`);
+      grpTab.innerHTML = `${groupLabel} <span class="header-ver" style="margin-left:4px">${grouped.length}</span>`;
+      subtabsEl.appendChild(grpTab);
+
+      const grpPanel = document.createElement('div');
+      grpPanel.className = 'dynamic-panel hidden';
+      grpPanel.id = `panel-${type}-grouped`;
+      const grpTbl = document.createElement('table');
+      grpTbl.id = `tbl-${type}-grouped`;
+      const grpWrap = document.createElement('div');
+      grpWrap.className = 'table-wrap';
+      grpWrap.appendChild(grpTbl);
+      grpPanel.appendChild(grpWrap);
+      sectionsEl.appendChild(grpPanel);
+      renderTbl(`tbl-${type}-grouped`, grouped);
+    }
+
+    // ── Export buttons ────────────────────────────────────────────────
+    const expBtn = document.createElement('button');
+    expBtn.className = 'btn btn-outline dynamic-exp-btn';
+    expBtn.textContent = `⬇ ${label} .xlsx`;
+    expBtn.onclick = () => exportType(type, false);
+    actionBar.appendChild(expBtn);
+
+    if (!isFrame && grouped.length) {
+      const expGrpBtn = document.createElement('button');
+      expGrpBtn.className = 'btn btn-outline dynamic-exp-btn';
+      expGrpBtn.textContent = `⬇ ${groupLabel} .xlsx`;
+      expGrpBtn.onclick = () => exportType(type, true);
+      actionBar.appendChild(expGrpBtn);
+    }
+  });
+
+  // Combined export button
+  const allBtn = document.createElement('button');
+  allBtn.className = 'btn btn-outline dynamic-exp-btn';
+  allBtn.textContent = '⬇ Combined .xlsx';
+  allBtn.onclick = doExportBoth;
+  actionBar.appendChild(allBtn);
+}
+
+function switchSub(t) {
+  document.querySelectorAll('.subtab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.dynamic-panel').forEach(p => p.classList.add('hidden'));
+  const tab   = document.getElementById(`st-${t}`);
+  const panel = document.getElementById(`panel-${t}`);
+  if (tab)   tab.classList.add('active');
+  if (panel) panel.classList.remove('hidden');
+}
+
+function exportType(type, grouped) {
+  const rows  = grouped ? (typeGrouped[type]||[]) : (typeRows[type]||[]);
+  const label = grouped ? `${type} Grouped` : type;
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), label);
+  XLSX.writeFile(wb, `${currentFile}_${label.replace(/\s+/g,'_')}.xlsx`);
+}
+
+function doExport(type) { exportType(type, false); }
+
+function doExportBoth() {
+  const wb = XLSX.utils.book_new();
+  doorTypes.forEach(type => {
+    const rows = typeRows[type]||[];
+    if (rows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), type);
+    const grp = typeGrouped[type]||[];
+    if (grp.length)  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(grp),  `${type} Grouped`);
+  });
+  XLSX.writeFile(wb, `${currentFile}_CONVERTED.xlsx`);
 }
 
 function renderTbl(id, rows) {
-  if (!rows.length) { document.getElementById(id).innerHTML="<tr><td style='color:#9ca3af;padding:16px'>No rows</td></tr>"; return; }
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (!rows.length) { el.innerHTML="<tr><td style='color:#9ca3af;padding:16px'>No rows</td></tr>"; return; }
   const cols = Object.keys(rows[0]);
   let h = `<thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>`;
   rows.forEach(r => {
@@ -1441,24 +1637,7 @@ function renderTbl(id, rows) {
       return `<td${cls?' class="'+cls+'"':''}>${display}</td>`;
     }).join('') + '</tr>';
   });
-  document.getElementById(id).innerHTML = h + '</tbody>';
-}
-
-// ══════════════════════════════════════════════════════════════════════
-// EXPORT
-// ══════════════════════════════════════════════════════════════════════
-function doExport(type) {
-  const rows=type==='doors'?doorRows:frameRows;
-  const suf=type==='doors'?'_WD_DOORS':'_HM_FRAMES';
-  const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),type==='doors'?'WD Doors':'HM Frames');
-  XLSX.writeFile(wb, currentFile+suf+'.xlsx');
-}
-function doExportBoth() {
-  const wb=XLSX.utils.book_new();
-  if (doorRows.length)  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(doorRows),'WD Doors');
-  if (frameRows.length) XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(frameRows),'HM Frames');
-  XLSX.writeFile(wb, currentFile+'_CONVERTED.xlsx');
+  el.innerHTML = h + '</tbody>';
 }
 
 function exportHardwareAudit() {
@@ -1571,9 +1750,8 @@ function exportHardwareAudit() {
 // ══════════════════════════════════════════════════════════════════════
 function mkMap(id, obj, key) {
   const el = document.getElementById(id);
+  if (!el) return; // silently skip if element not in DOM
   el.innerHTML = '';
-
-  // Existing rows
   Object.entries(obj).forEach(([k, v]) => {
     const d = document.createElement('div');
     d.className = 'map-row';
@@ -1636,6 +1814,33 @@ function toggleApiKeyVisibility() {
   else { inp.type = 'password'; btn.textContent = 'Show'; }
 }
 
+function renderFrameTypes() {
+  const el = document.getElementById('frameTypesList');
+  if (!el) return;
+  el.innerHTML = '';
+  (settings.frameTypes || []).forEach(t => {
+    const chip = document.createElement('div');
+    chip.style = 'display:flex;align-items:center;gap:4px;background:#dbeafe;border:1px solid #93c5fd;border-radius:4px;padding:3px 8px;font-size:11px;font-weight:700;color:#1d4ed8;';
+    chip.innerHTML = `${escHtml(t)} <button onclick="removeFrameType('${escHtml(t)}')" style="background:none;border:none;cursor:pointer;color:#93c5fd;font-size:12px;padding:0;line-height:1;">✕</button>`;
+    el.appendChild(chip);
+  });
+}
+
+function addFrameType() {
+  const inp = document.getElementById('s-newFrameType');
+  const val = inp.value.trim().toUpperCase();
+  if (!val) return;
+  if (!settings.frameTypes) settings.frameTypes = [];
+  if (!settings.frameTypes.includes(val)) settings.frameTypes.push(val);
+  inp.value = '';
+  renderFrameTypes();
+}
+
+function removeFrameType(t) {
+  settings.frameTypes = (settings.frameTypes || []).filter(x => x !== t);
+  renderFrameTypes();
+}
+
 function renderSettings() {
   document.getElementById('s-po').value = settings.po||'';
   document.getElementById('s-apikey').value = settings.apiKey||'';
@@ -1648,10 +1853,10 @@ function renderSettings() {
   mkMap('r-handMap',settings.handMap,'handMap');
   mkMap('r-coreMap',settings.coreMap,'coreMap');
   mkMap('r-undercutMap',settings.undercutMap,'undercutMap');
-  mkMap('r-elevMap',settings.elevMap,'elevMap');
   mkMap('r-frameHandMap',settings.frameHandMap,'frameHandMap');
   mkMap('r-frameKbMap',settings.frameKbMap,'frameKbMap');
   mkMap('r-anchorMap',settings.anchorMap,'anchorMap');
+  renderFrameTypes();
   renderMemRows();
 }
 function saveSettings() {
