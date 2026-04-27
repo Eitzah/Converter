@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Door Schedule Converter v4</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f2f5; color: #1a1e2e; min-height: 100vh; font-size: 13px; }
@@ -104,6 +104,7 @@ tr:nth-child(even) td { background: #f8f9fb; }
 tr:hover td { background: #fffbf0; }
 td.prep-cell { color: #92400e; font-weight: 600; }
 td.prep-missing { color: #b91c1c; font-style: italic; }
+td.pair-cell { color: #92400e; font-weight: 700; letter-spacing: 0.5px; }
 
 /* ── Settings ── */
 .s-wrap { max-width: 780px; }
@@ -311,9 +312,10 @@ const DEFAULT_SETTINGS = {
   sizeMode: 'feetinches',
   apiKey: BUILT_IN_API_KEY,
   frameTypes: ['HM','HMF','HM-F','FRAME'],
-  handMap:      { L:"LH", R:"RH", LR:"LHR", RR:"RHR", LH:"LH", RH:"RH", LHR:"LHR", RHR:"RHR" },
+  handMap:      { L:"LH", R:"RH", LR:"LHR", RR:"RHR", LH:"LH", RH:"RH", LHR:"LHR", RHR:"RHR",
+                  RRA:"RIGHT REVERSE ACTIVE", LRA:"LEFT REVERSE ACTIVE", BRA:"BOTH REVERSE ACTIVE" },
   coreMap:      { PC:"PC", MC:"MC", SCL:"SCL", Polystyrene:"PS", Honeycomb:"HC" },
-  undercutMap:  { "0.75":'3/4"', "1":'1"', "1.375":'1-1/8"' },
+  undercutMap:  { "0.75":'3/4"', ".75":'3/4"', "1":'1"', "1.0":'1"', "1.125":'1-1/8"', "1.375":'1-1/8"' },
   frameHandMap: { L:"LH", R:"RH", LR:"LHR", RR:"RHR", LH:"LH", RH:"RH", LHR:"LHR", RHR:"RHR",
                   RRA:"RIGHT REVERSE ACTIVE", LRA:"LEFT REVERSE ACTIVE", BRA:"BOTH REVERSE ACTIVE" },
   frameKbMap:   { "DW-16-WD":"16GA WELDED", "DW-16-KD":"16GA KD", "CMU-16-WD":"16GA WELDED CMU", "DW-14-WD":"14GA WELDED", "DW-18-WD":"18GA WELDED" },
@@ -1362,10 +1364,15 @@ function frameSz(wFt,wIn,hFt,hIn,throat,opng) {
   return `${wStr}" X ${hStr}" X ${t}`;
 }
 
-// ── Resolve floor value — Floor column only, Elevation is a drawing reference ──
+// ── Resolve floor value ───────────────────────────────────────────────
+// Priority: Floor column → elevMap(Elevation) → Elevation raw → blank
+// Note: Elevation is a drawing reference (e.g. 3F) NOT a floor number —
+// but when no Floor column exists we fall back to mapping it via elevMap
 function resolveFloor(r) {
   const direct = String(r.Floor || '').trim();
   if (direct && direct !== '---') return direct;
+  const elev = String(r.Elevation || '').trim().replace(/\s/g, '');
+  if (elev && elev !== '---') return settings.elevMap[elev] || elev;
   return '';
 }
 
@@ -1632,12 +1639,82 @@ function switchSub(t) {
   if (panel) panel.classList.remove('hidden');
 }
 
+// ── Apply formatting to worksheet ────────────────────────────────────
+function styleWorksheet(ws, rows) {
+  if (!ws || !rows.length) return;
+  const cols = Object.keys(rows[0]);
+  const opngTypeCol = cols.indexOf('OpngType');
+
+  // Set column widths
+  ws['!cols'] = cols.map(c => {
+    if (c === 'PREP FOR' || c === 'Marks' || c === 'Locations') return { wch: 40 };
+    if (c === 'SIZE' || c === 'Description') return { wch: 30 };
+    if (c === 'OpngNumbers') return { wch: 14 };
+    return { wch: 12 };
+  });
+
+  // Header style — dark navy bg, white bold text
+  const headerStyle = {
+    font:      { bold: true, color: { rgb: 'FFFFFF' }, sz: 10 },
+    fill:      { fgColor: { rgb: '1A1E2E' } },
+    alignment: { horizontal: 'center', vertical: 'center', wrapText: false },
+    border: {
+      bottom: { style: 'medium', color: { rgb: 'B8860B' } }
+    }
+  };
+
+  // Pair row style — yellow fill
+  const pairStyle = {
+    fill:      { fgColor: { rgb: 'FFFBEB' } },
+    alignment: { vertical: 'center' },
+    border: {
+      left: { style: 'medium', color: { rgb: 'B8860B' } }
+    }
+  };
+
+  // Pair OpngType cell — bold amber
+  const pairTypeStyle = {
+    font:      { bold: true, color: { rgb: '92400E' }, sz: 10 },
+    fill:      { fgColor: { rgb: 'FFFBEB' } },
+    alignment: { horizontal: 'center', vertical: 'center' }
+  };
+
+  // Normal data style
+  const normalStyle = {
+    alignment: { vertical: 'center' },
+    font: { sz: 10 }
+  };
+
+  // Apply header styles
+  for (let c = 0; c < cols.length; c++) {
+    const ref = XLSX.utils.encode_cell({ r: 0, c });
+    if (ws[ref]) ws[ref].s = headerStyle;
+  }
+
+  // Apply data row styles
+  rows.forEach((r, i) => {
+    const opng = String(r.OpngType || '').trim().toUpperCase();
+    const isPair = opng === 'PAIR' || opng === 'UNPR';
+    for (let c = 0; c < cols.length; c++) {
+      const ref = XLSX.utils.encode_cell({ r: i + 1, c });
+      if (!ws[ref]) ws[ref] = { t: 's', v: '' };
+      if (isPair) {
+        ws[ref].s = c === opngTypeCol ? pairTypeStyle : pairStyle;
+      } else {
+        ws[ref].s = normalStyle;
+      }
+    }
+  });
+}
+
 function exportType(type, grouped) {
   const rows  = grouped ? (typeGrouped[type]||[]) : (typeRows[type]||[]);
   const label = grouped ? `${type} Grouped` : type;
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), label);
-  XLSX.writeFile(wb, `${currentFile}_${label.replace(/\s+/g,'_')}.xlsx`);
+  const ws = XLSX.utils.json_to_sheet(rows);
+  styleWorksheet(ws, rows);
+  XLSX.utils.book_append_sheet(wb, ws, label);
+  XLSX.writeFile(wb, `${currentFile}_${label.replace(/\s+/g,'_')}.xlsx`, {bookType:'xlsx', cellStyles:true});
 }
 
 function doExport(type) { exportType(type, false); }
@@ -1646,11 +1723,19 @@ function doExportBoth() {
   const wb = XLSX.utils.book_new();
   doorTypes.forEach(type => {
     const rows = typeRows[type]||[];
-    if (rows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), type);
+    if (rows.length) {
+      const ws = XLSX.utils.json_to_sheet(rows);
+      styleWorksheet(ws, rows);
+      XLSX.utils.book_append_sheet(wb, ws, type);
+    }
     const grp = typeGrouped[type]||[];
-    if (grp.length)  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(grp),  `${type} Grouped`);
+    if (grp.length) {
+      const wsG = XLSX.utils.json_to_sheet(grp);
+      styleWorksheet(wsG, grp);
+      XLSX.utils.book_append_sheet(wb, wsG, `${type} Grouped`);
+    }
   });
-  XLSX.writeFile(wb, `${currentFile}_CONVERTED.xlsx`);
+  XLSX.writeFile(wb, `${currentFile}_CONVERTED.xlsx`, {bookType:'xlsx', cellStyles:true});
 }
 
 function renderTbl(id, rows) {
@@ -1660,9 +1745,13 @@ function renderTbl(id, rows) {
   const cols = Object.keys(rows[0]);
   let h = `<thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>`;
   rows.forEach(r => {
-    h += '<tr>' + cols.map(c => {
+    const opng = String(r.OpngType||'').trim().toUpperCase();
+    const isPair = opng === 'PAIR' || opng === 'UNPR';
+    const rowStyle = isPair ? ' style="background:#fffbeb;border-left:3px solid #b8860b;"' : '';
+    h += `<tr${rowStyle}>` + cols.map(c => {
       const v = String(r[c]??'').replace(/\n/g,'↵ ');
-      const cls = c==='PREP FOR' ? (v ? 'prep-cell' : 'prep-missing') : '';
+      const cls = c==='PREP FOR' ? (v ? 'prep-cell' : 'prep-missing') :
+                  c==='OpngType' && isPair ? 'pair-cell' : '';
       const display = c==='PREP FOR' && !v ? '(blank)' : v;
       return `<td${cls?' class="'+cls+'"':''}>${display}</td>`;
     }).join('') + '</tr>';
@@ -1772,7 +1861,7 @@ function exportHardwareAudit() {
     XLSX.utils.book_append_sheet(wb, ws3, 'Memory Snapshot');
   }
 
-  XLSX.writeFile(wb, (currentFile||'hardware')+'_AUDIT.xlsx');
+  XLSX.writeFile(wb, (currentFile||'hardware')+'_AUDIT.xlsx', {bookType:'xlsx', cellStyles:true});
 }
 
 // ══════════════════════════════════════════════════════════════════════
