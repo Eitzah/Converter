@@ -140,7 +140,7 @@ td.pair-cell { color: #92400e; font-weight: 700; letter-spacing: 0.5px; }
       <div class="header-label">Door Schedule</div>
       <div class="header-title">Converter</div>
     </div>
-    <span class="header-ver">v4</span>
+    <span class="header-ver">v4.1</span>
   </div>
   <div class="tabs">
     <button class="tab active" id="tab-btn-upload"  onclick="goTab('upload')">Upload</button>
@@ -315,7 +315,7 @@ const DEFAULT_SETTINGS = {
   handMap:      { L:"LH", R:"RH", LR:"LHR", RR:"RHR", LH:"LH", RH:"RH", LHR:"LHR", RHR:"RHR",
                   RRA:"RIGHT REVERSE ACTIVE", LRA:"LEFT REVERSE ACTIVE", BRA:"BOTH REVERSE ACTIVE" },
   coreMap:      { PC:"PC", MC:"MC", SCL:"SCL", Polystyrene:"PS", Honeycomb:"HC" },
-  undercutMap:  { "0.75":'3/4"', ".75":'3/4"', "1":'1"', "1.0":'1"', "1.125":'1-1/8"', "1.375":'1-1/8"' },
+  undercutMap:  { "0.75":'3/4"', ".75":'3/4"', "1":'1"', "1.0":'1"', "1.125":'1-1/8"', "1.375":'1-3/8"' },
   frameHandMap: { L:"LH", R:"RH", LR:"LHR", RR:"RHR", LH:"LH", RH:"RH", LHR:"LHR", RHR:"RHR",
                   RRA:"RIGHT REVERSE ACTIVE", LRA:"LEFT REVERSE ACTIVE", BRA:"BOTH REVERSE ACTIVE" },
   frameKbMap:   { "DW-16-WD":"16GA WELDED", "DW-16-KD":"16GA KD", "CMU-16-WD":"16GA WELDED CMU", "DW-14-WD":"14GA WELDED", "DW-18-WD":"18GA WELDED" },
@@ -368,7 +368,13 @@ let currentFile = "converted";
 function loadSettings() {
   try {
     const s = localStorage.getItem("dcv4_settings");
-    return s ? deepMerge(JSON.parse(JSON.stringify(DEFAULT_SETTINGS)), JSON.parse(s)) : JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+    const merged = s ? deepMerge(JSON.parse(JSON.stringify(DEFAULT_SETTINGS)), JSON.parse(s)) : JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+    // ── One-time migration: heal bad shipped default (1.375 was wrongly mapped to 1-1/8") ──
+    if (merged.undercutMap && merged.undercutMap["1.375"] === '1-1/8"') {
+      merged.undercutMap["1.375"] = '1-3/8"';
+      try { localStorage.setItem("dcv4_settings", JSON.stringify(merged)); } catch {}
+    }
+    return merged;
   } catch { return JSON.parse(JSON.stringify(DEFAULT_SETTINGS)); }
 }
 function loadItemMemory() {
@@ -435,11 +441,15 @@ function resetJob() {
   document.getElementById('btn-parse').disabled = true;
   document.getElementById('parse-status').textContent = '';
 
-  // Clear result areas
+  // Clear result areas — guard elements that may not exist
   document.getElementById('setsGrid').innerHTML = '';
   document.getElementById('setsSummary').innerHTML = '';
-  document.getElementById('tblDoors').innerHTML = '';
-  document.getElementById('tblFrames').innerHTML = '';
+  const tD = document.getElementById('tblDoors');  if (tD) tD.innerHTML = '';
+  const tF = document.getElementById('tblFrames'); if (tF) tF.innerHTML = '';
+  document.querySelectorAll('.dynamic-panel').forEach(el => el.remove());
+  document.querySelectorAll('.dynamic-exp-btn').forEach(el => el.remove());
+  const st = document.querySelector('#resultSection .subtabs');
+  if (st) st.innerHTML = '';
   document.getElementById('resultSection').classList.add('hidden');
   ['btnExpDoors','btnExpFrames','btnExpBoth'].forEach(id => {
     document.getElementById(id)?.classList.add('hidden');
@@ -456,12 +466,6 @@ function resetJob() {
 
   // Go back to upload tab
   goTab('upload');
-}
-function switchSub(t) {
-  ['doors','frames','grouped'].forEach(s => {
-    document.getElementById('st-'+s).classList.toggle('active', s===t);
-    document.getElementById('panel-'+s).classList.toggle('hidden', s!==t);
-  });
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -1365,15 +1369,31 @@ function frameSz(wFt,wIn,hFt,hIn,throat,opng) {
 }
 
 // ── Resolve floor value ───────────────────────────────────────────────
-// Priority: Floor column → elevMap(Elevation) → Elevation raw → blank
-// Note: Elevation is a drawing reference (e.g. 3F) NOT a floor number —
-// but when no Floor column exists we fall back to mapping it via elevMap
+// Floor comes ONLY from the Floor column. Elevation is a drawing reference
+// (a blueprint detail callout, e.g. 3F) — it is NEVER floor data and must
+// never be used as a fallback. No Floor column = blank, visibly.
 function resolveFloor(r) {
   const direct = String(r.Floor || '').trim();
   if (direct && direct !== '---') return direct;
-  const elev = String(r.Elevation || '').trim().replace(/\s/g, '');
-  if (elev && elev !== '---') return settings.elevMap[elev] || elev;
   return '';
+}
+
+// ── Resolve undercut value through the map — normalization-safe ──────
+// Canonicalizes numeric variants so ".75"/"0.75"/"0.750" and "1"/"1.0"/"1.00"
+// all hit the same map entry regardless of how the source software wrote them.
+function resolveUndercut(v) {
+  const raw = String(v ?? '').trim();
+  if (raw === '' || raw === '---') return '';
+  // 1) exact key as written
+  if (settings.undercutMap[raw] !== undefined) return settings.undercutMap[raw];
+  // 2) canonical numeric key (".75" → "0.75", "1.0" → "1")
+  const n = parseFloat(raw);
+  if (!isNaN(n)) {
+    const canon = String(n);
+    if (settings.undercutMap[canon] !== undefined) return settings.undercutMap[canon];
+  }
+  // 3) no mapping — pass through as-is so the miss is visible, not silently blank
+  return raw;
 }
 
 // ── Group identical door lines ──────────────────────────────────────
@@ -1494,7 +1514,7 @@ function doConvert() {
           'HdweSetID':hdwe,'DoorKB':r.DoorKB,
           'DoorCore':settings.coreMap[String(r.DoorCore||'').trim()]||String(r.DoorCore||'').trim(),
           'DoorFinish':r.DoorFinish,'DoorElev':r.DoorElev,
-          'DoorUndercut':settings.undercutMap[String(r.DoorUndercut||'').trim()]||String(r.DoorUndercut||'').trim(),
+          'DoorUndercut':resolveUndercut(r.DoorUndercut),
           'PREP FOR':getPrepFor(hdwe,opng)
         });
       }
