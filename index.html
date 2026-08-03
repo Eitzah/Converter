@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Door Schedule Converter v4</title>
+<title>Door Schedule Converter v4.2</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -117,6 +117,7 @@ td.pair-cell { color: #92400e; font-weight: 700; letter-spacing: 0.5px; }
 .map-row { display: grid; grid-template-columns: 1fr 18px 1fr 20px; gap: 5px; align-items: center; margin-bottom: 5px; }
 .arrow { text-align: center; color: #9ca3af; font-size: 12px; }
 .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
 .s-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
 .btn-save { width: 100%; padding: 11px; background: #b8860b; color: #ffffff; border: none; font-size: 11px; letter-spacing: 2px; cursor: pointer; font-family: inherit; font-weight: 700; transition: all 0.3s; margin-top: 8px; text-transform: uppercase; border-radius: 3px; }
 .btn-save:hover { background: #9a7009; }
@@ -140,7 +141,7 @@ td.pair-cell { color: #92400e; font-weight: 700; letter-spacing: 0.5px; }
       <div class="header-label">Door Schedule</div>
       <div class="header-title">Converter</div>
     </div>
-    <span class="header-ver">v4.1</span>
+    <span class="header-ver">v4.2</span>
   </div>
   <div class="tabs">
     <button class="tab active" id="tab-btn-upload"  onclick="goTab('upload')">Upload</button>
@@ -249,9 +250,10 @@ td.pair-cell { color: #92400e; font-weight: 700; letter-spacing: 0.5px; }
       </label>
     </div>
     <div class="field-hint" style="margin-bottom:14px;">Throat is always expressed as inches regardless of this setting.</div>
-    <div class="two-col">
+    <div class="three-col">
       <div><label class="field-label">Width Deduction (in)</label><input class="field-input" id="s-wDed" type="number" step="0.0625"><div class="field-hint">Default 0.25 = 1/8" each side</div></div>
-      <div><label class="field-label">Height Deduction (in)</label><input class="field-input" id="s-hDed" type="number" step="0.0625"><div class="field-hint">Default 0.875 = 7/8"</div></div>
+      <div><label class="field-label">Head Clearance (in)</label><input class="field-input" id="s-headClear" type="number" step="0.0625"><div class="field-hint">Default 0.125 = 1/8". Door height = opening − head clearance − <strong>that row's undercut</strong>.</div></div>
+      <div><label class="field-label">Height Deduction — fallback (in)</label><input class="field-input" id="s-hDed" type="number" step="0.0625"><div class="field-hint">Default 0.875 = 7/8". Used ONLY when a row has no undercut value.</div></div>
     </div>
   </div>
   <div class="s-cols">
@@ -308,7 +310,7 @@ td.pair-cell { color: #92400e; font-weight: 700; letter-spacing: 0.5px; }
 const BUILT_IN_API_KEY = '';
 
 const DEFAULT_SETTINGS = {
-  po: "", wDeduct: 0.25, hDeduct: 0.875,
+  po: "", wDeduct: 0.25, hDeduct: 0.875, headClear: 0.125,
   sizeMode: 'feetinches',
   apiKey: BUILT_IN_API_KEY,
   frameTypes: ['HM','HMF','HM-F','FRAME'],
@@ -372,6 +374,11 @@ function loadSettings() {
     // ── One-time migration: heal bad shipped default (1.375 was wrongly mapped to 1-1/8") ──
     if (merged.undercutMap && merged.undercutMap["1.375"] === '1-1/8"') {
       merged.undercutMap["1.375"] = '1-3/8"';
+      try { localStorage.setItem("dcv4_settings", JSON.stringify(merged)); } catch {}
+    }
+    // ── Migration: browsers saved before v4.2 have no headClear key ──
+    if (merged.headClear === undefined || merged.headClear === null || isNaN(parseFloat(merged.headClear))) {
+      merged.headClear = 0.125;
       try { localStorage.setItem("dcv4_settings", JSON.stringify(merged)); } catch {}
     }
     return merged;
@@ -1350,9 +1357,30 @@ function throatFmt(v) {
   return fr ? `${w}-${fr}"` : `${n}"`;
 }
 
-function doorSz(wFt,wIn,hFt,hIn,thick,wD,hD) {
+// ── Undercut → inches ────────────────────────────────────────────────
+// Handles raw numerics from the source software (0.75, .75, 1, 1.375),
+// bare fractions ("3/4"), and mapped display strings ('1-3/8"', '1 3/8"').
+// Returns null when the row has no usable undercut value.
+function ucToInches(v) {
+  const raw = String(v ?? '').trim().replace(/"/g,'');
+  if (raw === '' || raw === '---') return null;
+  if (/^\d*\.?\d+$/.test(raw)) return parseFloat(raw);
+  const m = raw.match(/^(?:(\d+)\s*[-\s]\s*)?(\d+)\s*\/\s*(\d+)$/);
+  if (m) return (m[1] ? parseInt(m[1]) : 0) + parseInt(m[2]) / parseInt(m[3]);
+  const n = parseFloat(raw);
+  return isNaN(n) ? null : n;
+}
+
+// ── Door size ────────────────────────────────────────────────────────
+// Door height = opening height − head clearance − THAT ROW'S undercut.
+// The flat hD (Height Deduction) is a fallback used ONLY when the row
+// carries no usable undercut value.
+function doorSz(wFt,wIn,hFt,hIn,thick,wD,hD,ucRaw) {
   const t={"4":'1-3/4"',"1.75":'1-3/4"'}[String(thick)]||thick+'"';
-  return `${fmtDim(wFt*12+wIn-wD)}" X ${fmtDim(hFt*12+hIn-hD)}" X ${t}`;
+  const uc   = ucToInches(ucRaw);
+  const head = parseFloat(settings.headClear);
+  const hTot = (uc !== null && !isNaN(head)) ? head + uc : hD;
+  return `${fmtDim(wFt*12+wIn-wD)}" X ${fmtDim(hFt*12+hIn-hTot)}" X ${t}`;
 }
 function frameSz(wFt,wIn,hFt,hIn,throat,opng) {
   const w=wFt*12+wIn, h=hFt*12+hIn, t=throatFmt(throat);
@@ -1508,7 +1536,7 @@ function doConvert() {
         typeRows[doorType].push({
           'PO#':po,'OpngNumbers':r.OpngNumbers,'Qty':r.Qty,
           'Floor':resolveFloor(r),'Loc1':r.Loc1,'Label':r.Label,
-          'SIZE':doorSz(wFt,wIn,hFt,hIn,r.DoorThickness||4,wD,hD),
+          'SIZE':doorSz(wFt,wIn,hFt,hIn,r.DoorThickness||4,wD,hD,r.DoorUndercut),
           'WidthFt':wFt,'WidthIn':wIn,'HeightFt':hFt,'HeightIn':hIn,'OpngType':opng,
           'Hand':settings.handMap[String(r.Hand||'').trim()]||String(r.Hand||'').trim(),
           'HdweSetID':hdwe,'DoorKB':r.DoorKB,
@@ -1816,8 +1844,6 @@ function exportHardwareAudit() {
   // Build a map: setId -> total openings qty from xlsx
   // Each opening in xlsx has a Qty (number of doors/frames for that opening number)
   // We multiply: openingQty × item qty within the set
-  // Since PDF items don't carry per-item qty easily, we use 1 per item as default
-  // but multiply by the number of openings using that set from the xlsx
 
   // Step 1: count total openings per set from xlsx
   const setOpeningQty = {}; // setId -> sum of Qty
@@ -1993,6 +2019,7 @@ function renderSettings() {
   document.getElementById('s-apikey').value = settings.apiKey||'';
   document.getElementById('s-wDed').value = settings.wDeduct;
   document.getElementById('s-hDed').value=settings.hDeduct;
+  document.getElementById('s-headClear').value = (settings.headClear !== undefined && settings.headClear !== null) ? settings.headClear : 0.125;
   // Size mode radio
   const smVal = settings.sizeMode || 'feetinches';
   document.getElementById('sm-feetinches').checked = smVal === 'feetinches';
@@ -2011,6 +2038,8 @@ function saveSettings() {
   settings.apiKey = document.getElementById('s-apikey').value.trim();
   settings.wDeduct = parseFloat(document.getElementById('s-wDed').value)||0;
   settings.hDeduct = parseFloat(document.getElementById('s-hDed').value)||0;
+  const hc = parseFloat(document.getElementById('s-headClear').value);
+  settings.headClear = isNaN(hc) ? 0.125 : hc;
   const smEl = document.querySelector('input[name="sizeMode"]:checked');
   if (smEl) settings.sizeMode = smEl.value;
 
